@@ -1,6 +1,4 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CrestCore.Contracts;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -9,64 +7,148 @@ using Windows.System;
 
 namespace CrestWindows;
 
-// Proof-of-concept shell. Workspace names organize links in memory only.
-// They deliberately do not pretend to provide Crest's cookie/profile isolation.
+/// The first CrestCore-connected WinUI view. CrestCore owns the Space/tab
+/// records and typed navigation commands. A single shared WebView2 still
+/// renders the selected URL until the full Windows engine adapter is ready.
 public sealed partial class MainWindow : Window
 {
-    private const string HomeUrl = "https://example.com/";
-    private readonly Dictionary<string, ObservableCollection<PreviewTab>> _spaces = new()
-    {
-        ["Work"] = new(),
-        ["Personal"] = new()
-    };
+    #region Static Variables
 
-    private bool _switching;
-    private bool _ready;
+    private const string HomeUrl = "https://example.com/";
+
+    #endregion
+
+    #region Types
+
+    private sealed record SpaceRow(Guid Id, string Name)
+    {
+        public override string ToString() => Name;
+    }
+
+    private sealed record TabRow(Guid Id, string Title)
+    {
+        public override string ToString() => Title;
+    }
+
+    #endregion
+
+    #region Variables
+
+    private readonly CoreWorkspace core;
+    private bool refreshing;
+
+    #endregion
+
+    #region Constructors
 
     public MainWindow()
     {
         InitializeComponent();
 
-        _spaces["Work"].Add(new PreviewTab("Welcome", HomeUrl));
-        _spaces["Personal"].Add(new PreviewTab("Welcome", HomeUrl));
+        core = new CoreWorkspace();
+        Closed += (_, _) => core.Dispose();
 
         BrowserView.NavigationCompleted += BrowserView_NavigationCompleted;
-        SpaceBox.Items.Add("Work");
-        SpaceBox.Items.Add("Personal");
-        _ready = true;
-        SpaceBox.SelectedIndex = 0;
+        Refresh();
     }
+
+    #endregion
+
+    #region Actions - Core presentation
+
+    private void Refresh()
+    {
+        refreshing = true;
+        try
+        {
+            SpaceBox.Items.Clear();
+            foreach (var space in core.Spaces)
+                SpaceBox.Items.Add(new SpaceRow(space.Id, space.Settings.Name));
+
+            SpaceBox.SelectedItem = SpaceBox.Items.OfType<SpaceRow>()
+                .FirstOrDefault(space => space.Id == core.ShownSpaceId);
+
+            TabList.ItemsSource = core.SelectedSpace?.Tabs
+                .Select(tab => new TabRow(tab.Id, tab.DisplayTitle)).ToArray()
+                ?? [];
+
+            TabList.SelectedItem = (TabList.ItemsSource as TabRow[])?
+                .FirstOrDefault(tab => tab.Id == core.ShownTabId);
+        }
+        finally
+        {
+            refreshing = false;
+        }
+        ShowSelectedPage();
+    }
+
+    private void ShowSelectedPage()
+    {
+        var url = core.SelectedTab?.Url ?? HomeUrl;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return;
+
+        UrlBox.Text = url;
+        // Do not navigate again if this same WebView2 already shows the page.
+        // A future engine binding will retain one live page per tab.
+        if (BrowserView.Source is null || BrowserView.Source.AbsoluteUri != uri.AbsoluteUri)
+            BrowserView.Source = uri;
+
+        StatusText.Text = "CrestCore tabs & Spaces · WebView2 shared profile (not isolated)";
+    }
+
+    #endregion
+
+    #region Actions - Spaces and tabs
 
     private void SpaceBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_ready || SpaceBox.SelectedItem is not string name || !_spaces.TryGetValue(name, out var tabs))
+        if (refreshing || SpaceBox.SelectedItem is not SpaceRow selected)
             return;
-        _switching = true;
-        TabList.ItemsSource = tabs;
-        _switching = false;
-        TabList.SelectedIndex = tabs.Count > 0 ? 0 : -1;
+
+        try
+        {
+            core.ShowSpace(selected.Id);
+            Refresh();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = error.Message;
+        }
     }
 
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_switching || TabList.SelectedItem is not PreviewTab tab)
+        if (refreshing || TabList.SelectedItem is not TabRow selected || core.ShownSpaceId is not { } spaceId)
             return;
 
-        UrlBox.Text = tab.Address;
-        if (Uri.TryCreate(tab.Address, UriKind.Absolute, out var uri))
-            BrowserView.Source = uri;
+        try
+        {
+            core.ShowTab(spaceId, selected.Id);
+            Refresh();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = error.Message;
+        }
     }
 
     private void NewTab_Click(object sender, RoutedEventArgs e)
     {
-        if (SpaceBox.SelectedItem is not string name)
-            return;
-
-        var tab = new PreviewTab("New tab", HomeUrl);
-        _spaces[name].Add(tab);
-        TabList.SelectedItem = tab;
-        UrlBox.Focus(FocusState.Programmatic);
+        try
+        {
+            core.OpenTab();
+            Refresh();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = error.Message;
+        }
     }
+
+    #endregion
+
+    #region Actions - Navigation
 
     private void Go_Click(object sender, RoutedEventArgs e) => Navigate(UrlBox.Text);
 
@@ -81,46 +163,28 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(string input)
     {
-        var text = input.Trim();
-        if (text.Length == 0)
-            return;
-
-        if (!text.Contains("://", StringComparison.Ordinal))
+        try
         {
-            if (text.Contains(' ') || !text.Contains('.'))
-                text = "https://www.bing.com/search?q=" + Uri.EscapeDataString(text);
-            else
-                text = "https://" + text;
+            if (!core.OpenAddress(input))
+            {
+                StatusText.Text = "Enter an address or search phrase.";
+                return;
+            }
+            Refresh();
         }
-
-        if (Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        catch (Exception error)
         {
-            BrowserView.Source = uri;
-            UrlBox.Text = uri.AbsoluteUri;
-        }
-        else
-        {
-            StatusText.Text = "Enter an HTTP(S) address or a search term.";
+            StatusText.Text = error.Message;
         }
     }
 
     private void BrowserView_NavigationCompleted(WebView2 sender, CoreWebView2NavigationCompletedEventArgs e)
     {
-        var uri = sender.Source;
-        if (uri is null)
-            return;
-
-        UrlBox.Text = uri.AbsoluteUri;
-        if (TabList.SelectedItem is PreviewTab tab)
-        {
-            tab.Address = uri.AbsoluteUri;
-            tab.Title = sender.CoreWebView2?.DocumentTitle is { Length: > 0 } title
-                ? title : uri.Host;
-        }
+        if (sender.Source is { } source)
+            UrlBox.Text = source.AbsoluteUri;
 
         StatusText.Text = e.IsSuccess
-            ? "WebView2 preview • Workspaces do not isolate cookies yet"
+            ? "CrestCore session preview · live-page synchronization and profile isolation are not yet implemented"
             : "The page could not be loaded.";
     }
 
@@ -140,32 +204,6 @@ public sealed partial class MainWindow : Window
     {
         BrowserView.Reload();
     }
-}
 
-public sealed class PreviewTab : INotifyPropertyChanged
-{
-    private string _title;
-
-    public PreviewTab(string title, string address)
-    {
-        _title = title;
-        Address = address;
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public string Title
-    {
-        get => _title;
-        set
-        {
-            if (_title == value) return;
-            _title = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
-        }
-    }
-
-    public string Address { get; set; }
-
-    public override string ToString() => Title;
+    #endregion
 }
