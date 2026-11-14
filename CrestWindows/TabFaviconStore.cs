@@ -10,7 +10,7 @@ public sealed class TabFaviconStore
 {
     #region Static Variables
 
-    public const uint MaximumIconBytes = 1024 * 1024;
+    public const int MaximumIconBytes = 1024 * 1024;
 
     #endregion
 
