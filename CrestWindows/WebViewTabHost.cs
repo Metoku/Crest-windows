@@ -29,6 +29,8 @@ public sealed class WebViewTabHost : IDisposable
         };
         public Task? Initialization { get; set; }
         public bool IsReady { get; set; }
+        public string? CompletedAddress { get; set; }
+        public string? CompletedTitle { get; set; }
     }
 
     #endregion
@@ -42,7 +44,8 @@ public sealed class WebViewTabHost : IDisposable
     private Guid? activeTabId;
     private bool disposed;
 
-    public event Action<Guid, Uri?, bool>? NavigationCompleted;
+    public event Action<Guid, Uri?, string?, bool>? NavigationCompleted;
+    public event Action<Guid, Uri?, string>? DocumentTitleChanged;
 
     public WebView2? ActiveView =>
         activeTabId is { } id && pages.TryGetValue(id, out var page) && page.IsReady ? page.View : null;
@@ -76,8 +79,20 @@ public sealed class WebViewTabHost : IDisposable
             var capturedTabId = tabId;
             page.View.NavigationCompleted += (sender, args) =>
             {
-                if (!disposed)
-                    NavigationCompleted?.Invoke(capturedTabId, sender.Source, args.IsSuccess);
+                if (disposed) return;
+                var source = sender.Source;
+                var title = sender.CoreWebView2?.DocumentTitle;
+                if (args.IsSuccess && source is not null)
+                {
+                    // The actual landing URL wins over the originally
+                    // requested URL (redirects, links, back/forward).
+                    // Otherwise selecting this tab would navigate it back.
+                    page.CoreAddress = source.AbsoluteUri;
+                    page.CompletedAddress = source.AbsoluteUri;
+                    page.CompletedTitle = title;
+                }
+
+                NavigationCompleted?.Invoke(capturedTabId, source, title, args.IsSuccess);
             };
             pages.Add(tabId, page);
             host.Children.Add(page.View);
@@ -100,6 +115,18 @@ public sealed class WebViewTabHost : IDisposable
             Navigate(page);
 
         await page.Initialization;
+    }
+
+    /// Navigate the currently live tab. Its successful navigation report
+    /// will update CrestCore; no new tab needs to be created.
+    public bool NavigateActive(string url)
+    {
+        if (ActiveView is not { } active
+            || !Uri.TryCreate(url, UriKind.Absolute, out var requested))
+            return false;
+
+        active.Source = requested;
+        return true;
     }
 
     #endregion
@@ -133,6 +160,21 @@ public sealed class WebViewTabHost : IDisposable
         // that would cause WebView2 to choose its default shared profile.
         await page.View.EnsureCoreWebView2Async(environment);
         if (disposed) return;
+
+        page.View.CoreWebView2.DocumentTitleChanged += (_, _) =>
+        {
+            if (disposed || page.CompletedAddress is null
+                || page.View.Source?.AbsoluteUri != page.CompletedAddress)
+                return;
+
+            var title = page.View.CoreWebView2.DocumentTitle;
+            if (string.IsNullOrWhiteSpace(title) || title == page.CompletedTitle)
+                return;
+            page.CompletedTitle = title;
+            var tabId = pages.FirstOrDefault(pair => ReferenceEquals(pair.Value, page)).Key;
+            if (tabId != Guid.Empty)
+                DocumentTitleChanged?.Invoke(tabId, page.View.Source, title);
+        };
 
         page.IsReady = true;
         Navigate(page);
