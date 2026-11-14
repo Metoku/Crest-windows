@@ -1,0 +1,59 @@
+name: Crest Windows Core Build
+
+# First milestone of Crest's Windows port: compile the portable .NET core.
+# This does NOT produce a usable Windows browser or a Chromium host.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - windows-core-ci
+    paths:
+      - 'CrestCore/**'
+      - '.github/workflows/windows-core.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'CrestCore/**'
+      - '.github/workflows/windows-core.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-core:
+    name: Compile CrestCore on Windows (x64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out Crest sources
+        uses: actions/checkout@v4
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: CrestCore/global.json
+          cache: false
+
+      - name: Show toolchain version
+        shell: pwsh
+        run: dotnet --info
+
+      - name: Restore managed core
+        shell: pwsh
+        run: dotnet restore CrestCore/src/CrestCore/CrestCore.csproj --nologo
+
+      - name: Compile managed core
+        shell: pwsh
+        run: dotnet build CrestCore/src/CrestCore/CrestCore.csproj -c Release --no-restore --nologo -p:ContinuousIntegrationBuild=true
+
+      - name: Upload core library (not a browser EXE)
+        uses: actions/upload-artifact@v4
+        with:
+          name: crest-core-windows-managed
+          path: |
+            CrestCore/src/CrestCore/bin/Release/net10.0/CrestCore.dll
+            CrestCore/src/CrestCore/bin/Release/net10.0/CrestCore.pdb
+            CrestCore/src/CrestCore/bin/Release/net10.0/CrestCore.deps.json
+          if-no-files-found: error
+          retention-days: 14
