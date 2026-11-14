@@ -30,7 +30,8 @@ public sealed partial class MainWindow
 
     private void InitializeDownloads()
     {
-        DownloadsList.ItemsSource = visibleDownloads;
+        // Flyout content may be created lazily. Do not touch named controls
+        // inside that flyout until their Loaded event has fired.
         browserTabs.DownloadStarted += BrowserTabs_DownloadStarted;
         Closed += (_, _) =>
         {
@@ -44,6 +45,12 @@ public sealed partial class MainWindow
             visibleDownloads.Clear();
         };
 
+        RefreshDownloads();
+    }
+
+    private void DownloadsPanel_Loaded(object sender, RoutedEventArgs e)
+    {
+        DownloadsList.ItemsSource = visibleDownloads;
         RefreshDownloads();
     }
 
@@ -97,8 +104,9 @@ public sealed partial class MainWindow
                 visibleDownloads.Add(item);
         }
 
-        NoDownloadsText.Visibility = visibleDownloads.Count == 0
-            ? Visibility.Visible : Visibility.Collapsed;
+        if (NoDownloadsText is not null)
+            NoDownloadsText.Visibility = visibleDownloads.Count == 0
+                ? Visibility.Visible : Visibility.Collapsed;
         UpdateDownloadsBadge();
     }
 
