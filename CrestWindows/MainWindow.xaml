@@ -110,6 +110,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0" Content="&#x2190;" Click="Back_Click" ToolTipService.ToolTip="Back"/>
                 <Button Grid.Column="1" Content="&#x2192;" Click="Forward_Click" ToolTipService.ToolTip="Forward"/>
@@ -118,6 +119,8 @@
                          KeyDown="UrlBox_KeyDown"/>
                 <Button Grid.Column="4" Content="Go" Click="Go_Click" />
                 <Button x:Name="HistoryButton" Grid.Column="5" Content="History" Click="History_Click" />
+                <Button x:Name="SplitButton" Grid.Column="6" Content="Split" Click="SplitButton_Click"
+                        ToolTipService.ToolTip="Show two Open tabs side by side" />
             </Grid>
             <Grid x:Name="BrowserHost" Grid.Row="1" />
             <TextBlock x:Name="StatusText" Grid.Row="2" Text="CrestCore session preview — separate WebView2 profiles per Space"
