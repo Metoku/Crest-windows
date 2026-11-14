@@ -96,6 +96,73 @@ public sealed class CoreWorkspace : IDisposable
     public void ShowTab(Guid spaceId, Guid tabId) =>
         Apply(core.Send(new ShowTab(windowId, spaceId, tabId)));
 
+    /// The core's WindowState determines which live pages are shown together.
+    /// No local Windows-only split membership is maintained.
+    public ShownCards? CurrentCards =>
+        window?.Cards.FirstOrDefault(cards => cards.SpaceId == ShownSpaceId);
+
+    public IReadOnlyList<TabState> CurrentVisibleTabs
+    {
+        get
+        {
+            var space = SelectedSpace;
+            if (space is null) return [];
+            var shown = CurrentCards?.TabIds;
+            if (shown is null || shown.Count == 0)
+                return SelectedTab is { } single ? [single] : [];
+            return [.. shown.Select(id => space.Tabs.FirstOrDefault(tab => tab.Id == id))
+                .OfType<TabState>()];
+        }
+    }
+
+    public double CurrentFirstColumnShare
+    {
+        get
+        {
+            var groupId = CurrentCards?.SplitGroupId;
+            var shares = window?.SplitColumnShares.FirstOrDefault(x => x.GroupId == groupId)?.Shares;
+            return shares is { Count: >= 2 } ? shares[0] : 0.5;
+        }
+    }
+
+    /// Join two ordinary Open tabs in the active Space. Pinned/Saved tabs
+    /// require CrestCore's copy semantics and are deliberately excluded from
+    /// this initial two-pane Windows UI.
+    public void SplitWith(Guid otherTabId)
+    {
+        var space = SelectedSpace ?? throw new InvalidOperationException("No active Space.");
+        var selected = SelectedTab ?? throw new InvalidOperationException("No selected tab.");
+        var other = space.Tabs.FirstOrDefault(tab => tab.Id == otherTabId);
+        if (other is null || other.Id == selected.Id || other.IsStartPage ||
+            selected.IsStartPage || other.Placement != TabPlacement.Current ||
+            selected.Placement != TabPlacement.Current || selected.SplitGroupId is not null ||
+            other.SplitGroupId is not null)
+            throw new InvalidOperationException("Choose two separate Open tabs to split.");
+
+        Apply(core.Send(new JoinSplit(workspaceId, windowId, space.Id,
+            otherTabId, selected.Id, Index: null)));
+    }
+
+    public void CloseCurrentSplit()
+    {
+        var spaceId = ShownSpaceId ?? throw new InvalidOperationException("No active Space.");
+        var groupId = CurrentCards?.SplitGroupId
+            ?? throw new InvalidOperationException("The selected tab is not in a split.");
+        Apply(core.Send(new DissolveSplit(workspaceId, spaceId, groupId)));
+    }
+
+    /// Persist the shares through CrestCore's window intent, not a parallel
+    /// preference file. The managed core normalizes and validates the values.
+    public void ResizeCurrentSplit(double firstShare)
+    {
+        if (CurrentCards is not { SplitGroupId: { } groupId, TabIds.Count: >= 2 })
+            return;
+
+        firstShare = Math.Clamp(firstShare, 0.2, 0.8);
+        Apply(core.Send(new ResizeSplitColumns(windowId, groupId,
+            [firstShare, 1.0 - firstShare])));
+    }
+
     public void OpenTab(string address = "https://example.com/")
     {
         var spaceId = ShownSpaceId ?? throw new InvalidOperationException("No Space is open.");

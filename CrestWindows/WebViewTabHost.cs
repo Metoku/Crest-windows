@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage.Streams;
 using Microsoft.Web.WebView2.Core;
@@ -18,6 +20,8 @@ public sealed class WebViewTabHost : IDisposable
     #endregion
 
     #region Types
+
+    public sealed record TabViewport(Guid TabId, Guid ProfileId, string? Address);
 
     private sealed class TabPage(Guid tabId, Guid profileId, string? address)
     {
@@ -47,8 +51,14 @@ public sealed class WebViewTabHost : IDisposable
     private readonly Dictionary<Guid, TabPage> pages = [];
     private readonly Dictionary<Guid, Task<CoreWebView2Environment>> environments = [];
     private Guid? activeTabId;
+    private Border? divider;
+    private double splitShare = 0.5;
+    private bool draggingDivider;
+    private bool showingSplit;
     private bool disposed;
 
+    public event Action<Guid>? TabActivated;
+    public event Action<double>? SplitRatioCommitted;
     public event Action<Guid, Uri?, string?, bool>? NavigationCompleted;
     public event Action<Guid, Uri?, string>? DocumentTitleChanged;
     public event Action<Guid, string, BitmapImage?>? FaviconChanged;
@@ -74,55 +84,187 @@ public sealed class WebViewTabHost : IDisposable
 
     #region Actions - Tabs
 
-    /// Shows the tab's existing WebView2 without reloading it. Only a change
-    /// in the URL commanded by CrestCore navigates an already-live page.
-    public async Task ShowAsync(Guid tabId, Guid profileId, string? coreAddress)
+    /// Render the exact cards CrestCore publishes for the active window.
+    /// A single card occupies the full host; two cards keep independent live
+    /// WebView2 pages on either side of a draggable divider. The core owns
+    /// split membership and saved width shares.
+    public async Task ShowCardsAsync(IReadOnlyList<TabViewport> cards,
+        Guid? selectedTabId, double firstColumnShare)
     {
         if (disposed) return;
+        if (cards.Count > 2)
+            throw new NotSupportedException("This Windows preview currently supports two split panes.");
 
-        if (!pages.TryGetValue(tabId, out var page))
+        var shown = cards.Select(card => card.TabId).ToHashSet();
+        activeTabId = selectedTabId is { } id && shown.Contains(id)
+            ? selectedTabId : cards.FirstOrDefault()?.TabId;
+
+        foreach (var card in cards)
         {
-            page = new TabPage(tabId, profileId, coreAddress);
-            var capturedTabId = tabId;
-            page.View.NavigationCompleted += (sender, args) =>
+            if (!pages.TryGetValue(card.TabId, out var page))
             {
-                if (disposed) return;
-                var source = sender.Source;
-                var title = sender.CoreWebView2?.DocumentTitle;
-                if (args.IsSuccess && source is not null)
+                page = new TabPage(card.TabId, card.ProfileId, card.Address);
+                var capturedTabId = card.TabId;
+                page.View.NavigationCompleted += (sender, args) =>
                 {
-                    // The actual landing URL wins over the originally
-                    // requested URL (redirects, links, back/forward).
-                    // Otherwise selecting this tab would navigate it back.
-                    page.CoreAddress = source.AbsoluteUri;
-                    page.CompletedAddress = source.AbsoluteUri;
-                    page.CompletedTitle = title;
-                }
+                    if (disposed) return;
+                    var source = sender.Source;
+                    var title = sender.CoreWebView2?.DocumentTitle;
+                    if (args.IsSuccess && source is not null)
+                    {
+                        page.CoreAddress = source.AbsoluteUri;
+                        page.CompletedAddress = source.AbsoluteUri;
+                        page.CompletedTitle = title;
+                    }
 
-                NavigationCompleted?.Invoke(capturedTabId, source, title, args.IsSuccess);
-            };
-            pages.Add(tabId, page);
-            host.Children.Add(page.View);
+                    NavigationCompleted?.Invoke(capturedTabId, source, title, args.IsSuccess);
+                };
+                page.View.GotFocus += (_, _) =>
+                {
+                    if (disposed || activeTabId == capturedTabId ||
+                        page.View.Visibility != Visibility.Visible)
+                        return;
+                    activeTabId = capturedTabId;
+                    TabActivated?.Invoke(capturedTabId);
+                };
+                pages.Add(card.TabId, page);
+                host.Children.Add(page.View);
+            }
+            else if (page.ProfileId != card.ProfileId)
+            {
+                throw new InvalidOperationException("CrestCore changed a tab's profile without an engine rehost.");
+            }
         }
-        else if (page.ProfileId != profileId)
+
+        SetColumns(cards.Count == 2, firstColumnShare);
+        for (var i = 0; i < cards.Count; i++)
         {
-            throw new InvalidOperationException("CrestCore changed a tab's profile without an engine rehost.");
+            var card = cards[i];
+            var page = pages[card.TabId];
+            var changedAddress = !string.Equals(page.CoreAddress, card.Address, StringComparison.Ordinal);
+            page.CoreAddress = card.Address;
+            Grid.SetColumn(page.View, cards.Count == 2 && i == 1 ? 2 : 0);
+            page.View.Visibility = Visibility.Visible;
+            if (page.Initialization is not null && page.IsReady && changedAddress)
+                Navigate(page);
         }
 
-        var changedAddress = !string.Equals(page.CoreAddress, coreAddress, StringComparison.Ordinal);
-        page.CoreAddress = coreAddress;
-        activeTabId = tabId;
+        foreach (var (tabId, entry) in pages)
+        {
+            if (!shown.Contains(tabId))
+                entry.View.Visibility = Visibility.Collapsed;
+        }
 
-        foreach (var (id, entry) in pages)
-            entry.View.Visibility = id == tabId ? Visibility.Visible : Visibility.Collapsed;
-
-        if (page.Initialization is null)
-            page.Initialization = InitializeAsync(page);
-        else if (page.IsReady && changedAddress)
-            Navigate(page);
-
-        await page.Initialization;
+        var tasks = new List<Task>(cards.Count);
+        foreach (var card in cards)
+        {
+            var page = pages[card.TabId];
+            page.Initialization ??= InitializeAsync(page);
+            tasks.Add(page.Initialization);
+        }
+        await Task.WhenAll(tasks);
     }
+
+    #endregion
+
+    #region Actions - Split layout
+
+    /// The pointer changes only transient layout until the drag ends. Only
+    /// the release sends a typed resize intent back to CrestCore.
+    private void SetColumns(bool split, double ratio)
+    {
+        splitShare = Math.Clamp(ratio, 0.2, 0.8);
+        showingSplit = split;
+        if (!split)
+        {
+            draggingDivider = false;
+            if (divider is not null)
+                host.Children.Remove(divider);
+            host.ColumnDefinitions.Clear();
+            host.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(1, GridUnitType.Star)
+            });
+            return;
+        }
+
+        if (host.ColumnDefinitions.Count != 3)
+        {
+            host.ColumnDefinitions.Clear();
+            host.ColumnDefinitions.Add(new ColumnDefinition());
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+            host.ColumnDefinitions.Add(new ColumnDefinition());
+        }
+
+        SetSplitShare(splitShare);
+
+        if (divider is null)
+        {
+            var lineBrush = Application.Current.Resources.TryGetValue(
+                "DividerStrokeColorDefaultBrush", out var resource)
+                ? resource as Brush : null;
+
+            divider = new Border
+            {
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                Child = new Border
+                {
+                    Width = 2,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Background = lineBrush ?? new SolidColorBrush(Microsoft.UI.Colors.Gray)
+                }
+            };
+            divider.PointerPressed += Divider_PointerPressed;
+            divider.PointerMoved += Divider_PointerMoved;
+            divider.PointerReleased += Divider_PointerReleased;
+            divider.PointerCanceled += (_, _) => draggingDivider = false;
+        }
+
+        Grid.SetColumn(divider, 1);
+        if (!host.Children.Contains(divider))
+            host.Children.Add(divider);
+    }
+
+    private void SetSplitShare(double ratio)
+    {
+        splitShare = Math.Clamp(ratio, 0.2, 0.8);
+        if (host.ColumnDefinitions.Count == 3)
+        {
+            host.ColumnDefinitions[0].Width = new GridLength(splitShare, GridUnitType.Star);
+            host.ColumnDefinitions[2].Width = new GridLength(1 - splitShare, GridUnitType.Star);
+        }
+    }
+
+    private void Divider_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!showingSplit || divider is null ||
+            !e.GetCurrentPoint(divider).Properties.IsLeftButtonPressed)
+            return;
+        draggingDivider = divider.CapturePointer(e.Pointer);
+        e.Handled = draggingDivider;
+    }
+
+    private void Divider_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!draggingDivider || !showingSplit || host.ActualWidth <= 48)
+            return;
+        SetSplitShare(e.GetCurrentPoint(host).Position.X / (host.ActualWidth - 8));
+        e.Handled = true;
+    }
+
+    private void Divider_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!draggingDivider || divider is null)
+            return;
+        draggingDivider = false;
+        divider.ReleasePointerCapture(e.Pointer);
+        SplitRatioCommitted?.Invoke(splitShare);
+        e.Handled = true;
+    }
+
+    #endregion
+
+    #region Actions - Tabs
 
     /// A favicon for a tab restored by CrestCore can be shown before its
     /// WebView2 is loaded. The address must match exactly, so a changed site

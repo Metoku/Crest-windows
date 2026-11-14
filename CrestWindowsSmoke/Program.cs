@@ -6,6 +6,7 @@ Guid workSpaceId;
 Guid personalProfileId;
 Guid workProfileId;
 Guid personalTabId;
+Guid workSplitGroupId;
 try
 {
     // Windows must remember the user's maximized choice independently of the
@@ -156,6 +157,28 @@ try
         Require(workspace.CurrentHistory.Count == 1 && workspace.CurrentHistory[0].Title == "Work product",
             "Work must record its own history without inheriting Personal history.");
 
+        // Two independent Open tabs become a real CrestCore split. Both must
+        // remain live members in WindowState.Cards, with resize shares owned
+        // by CrestCore's saved window record.
+        workspace.OpenTab("https://example.org/split");
+        var secondWorkTabId = workspace.SelectedTab!.Id;
+        workspace.SplitWith(workTabId);
+        Require(workspace.CurrentCards is { SplitGroupId: not null, TabIds.Count: 2 },
+            "Joining two Open tabs must publish a two-card split.");
+        workSplitGroupId = workspace.CurrentCards!.SplitGroupId!.Value;
+        Require(workspace.CurrentVisibleTabs.Select(tab => tab.Id).ToHashSet()
+            .SetEquals(new[] { workTabId, secondWorkTabId }),
+            "Both tabs must remain visible in CrestCore's current split.");
+
+        workspace.ResizeCurrentSplit(0.35);
+        Require(Math.Abs(workspace.CurrentFirstColumnShare - 0.35) < 0.001,
+            "Resizing the split must update the CrestCore saved window.");
+
+        workspace.ShowTab(work.Id, workTabId);
+        Require(workspace.CurrentCards?.SplitGroupId == workSplitGroupId &&
+            workspace.CurrentVisibleTabs.Count == 2,
+            "Selecting either split member must keep both cards visible.");
+
         workspace.ShowTab(personal.Id, personalTabId);
         Require(workspace.ShownSpaceId == personal.Id,
             "Showing the Personal tab should restore its Space.");
@@ -200,9 +223,25 @@ try
             "The saved window must restore the selected Space and tab.");
         Require(reopened.Spaces.Count == 2,
             "A restored session must not create duplicate default Spaces.");
+
+        // Confirm a fresh process restores group membership, both pages and
+        // the window's divider share; dissolving returns to one active card.
+        reopened.ShowSpace(workSpaceId);
+        Require(reopened.CurrentCards?.SplitGroupId == workSplitGroupId &&
+            reopened.CurrentVisibleTabs.Count == 2,
+            "The split and both live page identities must survive restart.");
+        Require(Math.Abs(reopened.CurrentFirstColumnShare - 0.35) < 0.001,
+            "The saved divider share must survive restart.");
+        reopened.CloseCurrentSplit();
+        Require(reopened.CurrentCards?.SplitGroupId is null &&
+            reopened.CurrentVisibleTabs.Count == 1,
+            "Unsplit must restore a single-pane window without deleting tabs.");
+        Require(reopened.Spaces.Single(space => space.Id == workSpaceId)
+            .Tabs.Count >= 2,
+            "Unsplit must preserve both tab records.");
     }
 
-    Console.WriteLine("PASS: CrestCore session, navigation, tab pin/save/close, folders, archive and restart.");
+    Console.WriteLine("PASS: CrestCore session, split cards, saved column widths, navigation, folders and restart.");
 }
 finally
 {
