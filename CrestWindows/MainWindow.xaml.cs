@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window
         browserTabs = new WebViewTabHost(BrowserHost,
             Path.Combine(Path.GetDirectoryName(core.StorageDirectory)!, "Profiles"));
         browserTabs.NavigationCompleted += BrowserTabs_NavigationCompleted;
+        browserTabs.DocumentTitleChanged += BrowserTabs_DocumentTitleChanged;
         BrowserHost.Loaded += (_, _) =>
         {
             browserHostLoaded = true;
@@ -118,17 +119,52 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void BrowserTabs_NavigationCompleted(Guid tabId, Uri? address, bool succeeded)
+    private void BrowserTabs_NavigationCompleted(Guid tabId, Uri? address, string? title, bool succeeded)
     {
-        if (core.ShownTabId != tabId)
+        if (!succeeded || address is null)
+        {
+            if (core.ShownTabId == tabId)
+                StatusText.Text = "The page could not be loaded.";
+            return;
+        }
+
+        // Ignore the preview's empty Start Page and engine-internal
+        // resources. CrestCore only records normal supported web URLs here.
+        if (address.Scheme is not ("http" or "https"))
             return;
 
-        if (address is not null)
-            UrlBox.Text = address.AbsoluteUri;
+        try
+        {
+            if (core.ReportNavigation(tabId, address.AbsoluteUri, title, newVisit: true))
+            {
+                Refresh();
+                if (core.ShownTabId == tabId)
+                {
+                    UrlBox.Text = address.AbsoluteUri;
+                    StatusText.Text = "Page and visit saved to CrestCore";
+                }
+            }
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = "Could not save navigation: " + error.Message;
+        }
+    }
 
-        StatusText.Text = succeeded
-            ? "Tab loaded • live URL/history reporting to CrestCore still pending"
-            : "The page could not be loaded.";
+    private void BrowserTabs_DocumentTitleChanged(Guid tabId, Uri? address, string title)
+    {
+        if (address?.Scheme is not ("http" or "https"))
+            return;
+
+        try
+        {
+            if (core.ReportNavigation(tabId, address.AbsoluteUri, title, newVisit: false))
+                Refresh();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = "Could not save page title: " + error.Message;
+        }
     }
 
     #endregion
@@ -199,18 +235,56 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            if (!core.OpenAddress(input))
+            var resolved = core.ResolveAddressInput(input);
+            if (resolved is null)
             {
                 StatusText.Text = "Enter an address or search phrase.";
                 return;
             }
 
-            Refresh();
+            // A typed URL replaces the active tab's live page. The
+            // NavigationCompleted event records its eventual landing URL.
+            // Without a ready page, fall back to Crest's OpenAddress intent.
+            if (browserTabs.NavigateActive(resolved))
+            {
+                UrlBox.Text = resolved;
+                return;
+            }
+
+            if (core.OpenAddress(input))
+                Refresh();
         }
         catch (Exception error)
         {
             StatusText.Text = error.Message;
         }
+    }
+
+    private void History_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout();
+        var visits = core.CurrentHistory.Take(25).ToArray();
+
+        if (visits.Length == 0)
+        {
+            menu.Items.Add(new MenuFlyoutItem { Text = "No recorded visits", IsEnabled = false });
+        }
+        else
+        {
+            foreach (var visit in visits)
+            {
+                var address = visit.Url;
+                var title = string.IsNullOrWhiteSpace(visit.Title) ? address : visit.Title;
+                var item = new MenuFlyoutItem
+                {
+                    Text = title.Length > 90 ? title[..90] + "…" : title
+                };
+                item.Click += (_, _) => Navigate(address);
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.ShowAt(HistoryButton);
     }
 
     private void Back_Click(object sender, RoutedEventArgs e)
