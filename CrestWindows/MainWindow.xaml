@@ -7,7 +7,17 @@
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
-    <Grid ColumnSpacing="0">
+    <Grid x:Name="RootLayout" ColumnSpacing="0">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="T" Modifiers="Control" Invoked="Shortcut_NewTab"/>
+            <KeyboardAccelerator Key="W" Modifiers="Control" Invoked="Shortcut_CloseTab"/>
+            <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="Shortcut_FocusAddress"/>
+            <KeyboardAccelerator Key="K" Modifiers="Control" Invoked="Shortcut_FocusAddress"/>
+            <KeyboardAccelerator Key="R" Modifiers="Control" Invoked="Shortcut_Reload"/>
+            <KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="Shortcut_NextTab"/>
+            <KeyboardAccelerator Key="Tab" Modifiers="Control, Shift" Invoked="Shortcut_PreviousTab"/>
+            <KeyboardAccelerator Key="J" Modifiers="Control" Invoked="Shortcut_Downloads"/>
+        </Grid.KeyboardAccelerators>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="232" />
             <ColumnDefinition Width="*" />
@@ -112,6 +122,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0" Content="&#x2190;" Click="Back_Click" ToolTipService.ToolTip="Back"/>
                 <Button Grid.Column="1" Content="&#x2192;" Click="Forward_Click" ToolTipService.ToolTip="Forward"/>
@@ -165,6 +176,42 @@
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button x:Name="SettingsButton" Grid.Column="8" Content="Settings"
+                        ToolTipService.ToolTip="Crest Windows settings">
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel Width="335" Spacing="12" Loaded="SettingsPanel_Loaded">
+                                <TextBlock Text="Settings" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="Appearance" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="AppearanceCombo" HorizontalAlignment="Stretch"
+                                          SelectionChanged="AppearanceCombo_SelectionChanged">
+                                    <ComboBoxItem Content="Follow Windows" Tag="System"/>
+                                    <ComboBoxItem Content="Light" Tag="Light"/>
+                                    <ComboBoxItem Content="Dark" Tag="Dark"/>
+                                </ComboBox>
+                                <TextBlock Text="Changes Crest's controls, not website themes."
+                                           FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock x:Name="SearchSpaceText" Text="Search for this Space"
+                                           FontWeight="SemiBold"/>
+                                <ComboBox x:Name="SearchEngineCombo" HorizontalAlignment="Stretch"
+                                          SelectionChanged="SearchEngineCombo_SelectionChanged"/>
+                                <TextBlock Text="Search uses CrestCore's saved per-Space preference."
+                                           FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="Keyboard shortcuts" FontWeight="SemiBold"/>
+                                <TextBlock Text="Ctrl+T  New tab  ·  Ctrl+W  Close tab
+Ctrl+L / Ctrl+K  Address bar  ·  Ctrl+R  Reload
+Ctrl+Tab  Next tab  ·  Ctrl+Shift+Tab  Previous tab
+Ctrl+J  Downloads"
+                                           TextWrapping="Wrap" FontSize="12"/>
+                                <TextBlock Text="Shortcuts in webpage content may be handled by WebView2."
+                                           TextWrapping="Wrap" FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
