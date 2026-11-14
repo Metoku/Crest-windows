@@ -49,6 +49,7 @@ public sealed partial class MainWindow : Window
         browserTabs.FaviconChanged += BrowserTabs_FaviconChanged;
         browserTabs.TabActivated += BrowserTabs_TabActivated;
         browserTabs.SplitRatioCommitted += BrowserTabs_SplitRatioCommitted;
+        InitializeDownloads();
         BrowserHost.Loaded += (_, _) =>
         {
             browserHostLoaded = true;
@@ -104,6 +105,7 @@ public sealed partial class MainWindow : Window
             refreshing = false;
         }
 
+        RefreshDownloads();
         ShowSelectedPage();
     }
 
