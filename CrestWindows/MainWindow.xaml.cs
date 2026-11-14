@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         core = new CoreWorkspace();
+        InitializeSettings();
         browserTabs = new WebViewTabHost(BrowserHost,
             Path.Combine(Path.GetDirectoryName(core.StorageDirectory)!, "Profiles"));
         browserTabs.NavigationCompleted += BrowserTabs_NavigationCompleted;
@@ -106,6 +107,7 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshDownloads();
+        RefreshSettingsChoices();
         ShowSelectedPage();
     }
 
