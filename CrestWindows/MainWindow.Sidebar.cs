@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace CrestWindows;
 
@@ -13,32 +14,45 @@ public sealed partial class MainWindow
     #region Types
 
     public sealed record SidebarEntry(Guid? TabId, Guid? FolderId,
-        string Label, string Glyph, Thickness Indent)
+        TabPlacement Placement, string Label, string Glyph, Thickness Indent)
     {
         public bool IsHeader => TabId is null && FolderId is null;
+
+        // Until the Windows adapter reports proper favicon images, pinned
+        // favorites show a recognisable initial and their full title on hover.
+        public string Initial => string.IsNullOrWhiteSpace(Label)
+            ? "•" : char.ToUpperInvariant(Label.TrimStart()[0]).ToString();
     }
 
     #endregion
 
     #region Actions - Sidebar presentation
 
-    /// Sections and folder nesting are projected from CrestCore's placement,
-    /// FolderId and ParentId records. There is no second Windows tab model.
+    /// The favorites grid is a projection of CrestCore's pinned tabs,
+    /// preserving its current ordering and identity.
+    private static SidebarEntry[] PinnedEntries(SpaceState? space) =>
+        space is null ? [] :
+        [.. space.Tabs.Where(tab => tab.Placement == TabPlacement.Pinned)
+            .Select(tab => new SidebarEntry(tab.Id, null, TabPlacement.Pinned,
+                string.IsNullOrWhiteSpace(tab.DisplayTitle) ? "New Tab" : tab.DisplayTitle,
+                "\uE718", new Thickness(0)))];
+
+    /// Saved/Open sections and folder nesting come from the same CrestCore
+    /// read model as the pinned grid, without duplicating tab ownership.
     private static SidebarEntry[] SidebarEntries(SpaceState? space)
     {
         if (space is null) return [];
 
         List<SidebarEntry> entries = [];
-        foreach (var placement in TabPlacement.All)
+        foreach (var placement in TabPlacement.All.Where(section => section != TabPlacement.Pinned))
         {
             var tabs = space.Tabs.Where(tab => tab.Placement == placement).ToArray();
             var folders = space.Folders.Where(folder => folder.Location == placement).ToArray();
             if (tabs.Length == 0 && folders.Length == 0) continue;
 
-            var icon = placement == TabPlacement.Pinned ? "\uE718"
-                : placement == TabPlacement.Saved ? "\uE8A4" : "\uE8A5";
-            entries.Add(new(null, null, placement.Title.ToUpperInvariant(), icon, new Thickness(2, 9, 0, 4)));
-
+            var icon = placement == TabPlacement.Saved ? "\uE8A4" : "\uE8A5";
+            entries.Add(new(null, null, placement, placement.Title.ToUpperInvariant(),
+                icon, new Thickness(2, 9, 0, 4)));
             AppendFolderRows(entries, space, placement, parentId: null, level: 0);
         }
         return [.. entries];
@@ -52,8 +66,8 @@ public sealed partial class MainWindow
         foreach (var folder in space.Folders.Where(folder =>
             folder.Location == placement && folder.ParentId == parentId))
         {
-            entries.Add(new(null, folder.Id,
-                (folder.IsCollapsed ? "  " : "  ") + folder.Title,
+            entries.Add(new(null, folder.Id, placement,
+                folder.Title,
                 folder.IsCollapsed ? "\uE76C" : "\uE8B7",
                 new Thickness(12 + 14 * level, 0, 0, 0)));
             if (!folder.IsCollapsed)
@@ -64,7 +78,7 @@ public sealed partial class MainWindow
             tab.Placement == placement && tab.FolderId == parentId))
         {
             var name = string.IsNullOrWhiteSpace(tab.DisplayTitle) ? "New Tab" : tab.DisplayTitle;
-            entries.Add(new(tab.Id, null, name, "\uE8A5",
+            entries.Add(new(tab.Id, null, placement, name, "\uE8A5",
                 new Thickness(12 + 14 * level, 0, 0, 0)));
         }
     }
@@ -73,21 +87,23 @@ public sealed partial class MainWindow
 
     #region Actions - Sidebar commands
 
+    private static SidebarEntry? FindSidebarEntry(DependencyObject? source, DependencyObject host)
+    {
+        while (source is not null)
+        {
+            if (source is FrameworkElement element && element.DataContext is SidebarEntry row)
+                return row;
+            if (ReferenceEquals(source, host)) break;
+            source = VisualTreeHelper.GetParent(source);
+        }
+        return null;
+    }
+
     private void TabList_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
-        SidebarEntry? entry = null;
-        var target = e.OriginalSource as DependencyObject;
-        while (target is not null)
-        {
-            if (target is FrameworkElement element && element.DataContext is SidebarEntry row)
-            {
-                entry = row;
-                break;
-            }
-            if (ReferenceEquals(target, TabList)) break;
-            target = VisualTreeHelper.GetParent(target);
-        }
-        entry ??= TabList.SelectedItem as SidebarEntry;
+        var host = sender as FrameworkElement ?? TabList;
+        var entry = FindSidebarEntry(e.OriginalSource as DependencyObject, host)
+            ?? (sender is GridView ? PinnedList.SelectedItem : TabList.SelectedItem) as SidebarEntry;
 
         if (entry is null || entry.IsHeader || core.ShownSpaceId is not { } spaceId) return;
 
@@ -140,9 +156,89 @@ public sealed partial class MainWindow
         }
 
         if (menu.Items.Count == 0) return;
-        menu.ShowAt(TabList);
+        menu.ShowAt(host);
         e.Handled = true;
     }
+
+    #region Actions - Drag and drop
+
+    private Guid? draggingTabId;
+    private Guid? draggingSpaceId;
+
+    /// Only a locally initiated tab drag is accepted. External text/URLs are
+    /// never interpreted as tab identities or shared as browser addresses.
+    private void Sidebar_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        if (e.Items.FirstOrDefault() is not SidebarEntry { TabId: { } tabId }
+            || core.ShownSpaceId is not { } spaceId)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        draggingTabId = tabId;
+        draggingSpaceId = spaceId;
+        e.Data.SetText(tabId.ToString("D"));
+        e.Data.RequestedOperation = DataPackageOperation.Move;
+    }
+
+    private void Sidebar_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
+    {
+        draggingTabId = null;
+        draggingSpaceId = null;
+    }
+
+    private void Sidebar_DragOver(object sender, DragEventArgs e)
+    {
+        if (draggingTabId is { } tabId && draggingSpaceId == core.ShownSpaceId
+            && core.SelectedSpace?.Tabs.Any(tab => tab.Id == tabId) == true)
+        {
+            e.AcceptedOperation = DataPackageOperation.Move;
+            e.Handled = true;
+        }
+    }
+
+    private void Sidebar_Drop(object sender, DragEventArgs e)
+    {
+        if (draggingTabId is not { } tabId || draggingSpaceId is not { } spaceId
+            || core.ShownSpaceId != spaceId || core.SelectedSpace is not { } space)
+            return;
+
+        // Determine the destination from the item under the pointer.
+        // Blank space in the ordinary list means the Open top-level.
+        var host = sender as FrameworkElement ?? TabList;
+        var row = FindSidebarEntry(e.OriginalSource as DependencyObject, host);
+        var placement = sender is GridView ? TabPlacement.Pinned
+            : row?.Placement ?? TabPlacement.Current;
+        Guid? folderId = null;
+        Guid? beforeId = null;
+
+        if (sender is not GridView)
+        {
+            if (row?.FolderId is { } folder && space.Folders.Any(item => item.Id == folder))
+                folderId = folder;
+            else if (row?.TabId is { } target && target != tabId
+                && space.Tabs.FirstOrDefault(item => item.Id == target) is { } targetTab)
+            {
+                folderId = targetTab.FolderId;
+                beforeId = target;
+            }
+        }
+        else if (row?.TabId is { } target && target != tabId)
+        {
+            beforeId = target;
+        }
+
+        // This is a GUID-only in-process move. The core handles folder
+        // validation, pinned capacity, ordering, and split constraints.
+        SidebarAction(() => core.DropTab(spaceId, tabId, placement, folderId, beforeId));
+        draggingTabId = null;
+        draggingSpaceId = null;
+        e.AcceptedOperation = DataPackageOperation.Move;
+        e.Handled = true;
+    }
+
+    #endregion
 
     private static MenuFlyoutItem Item(string label, string glyph, Action action)
     {
