@@ -3,13 +3,13 @@ name: Crest Windows Browser Preview
 on:
   workflow_dispatch:
   push:
-    branches: [windows-core-ci]
+    branches: [windows-core-ci, windows-session-persistence]
     paths:
       - 'CrestWindows/**'
       - 'CrestWindowsSmoke/**'
       - '.github/workflows/windows-preview.yml'
   pull_request:
-    branches: [main]
+    branches: [main, windows-core-ci]
     paths:
       - 'CrestWindows/**'
       - '.github/workflows/windows-preview.yml'
