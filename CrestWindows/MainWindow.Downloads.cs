@@ -118,6 +118,33 @@ public sealed partial class MainWindow
         DownloadsButton.Content = count > 0 ? $"Downloads ({count})" : "Downloads";
     }
 
+    /// "Save Page As" is intentionally not a DownloadStarting operation.
+    /// WebView2's native downloads dialog is the only complete view of those
+    /// saved pages, so expose it without pretending they are file transfers
+    /// in Crest's custom per-Space list.
+    private void ShowBrowserDownloads_Click(object sender, RoutedEventArgs e)
+    {
+        var view = browserTabs.ActiveView;
+        if (view?.CoreWebView2 is not { } browser)
+        {
+            StatusText.Text = "Select a loaded webpage to view its saved pages.";
+            return;
+        }
+
+        try
+        {
+            DownloadsButton.Flyout?.Hide();
+            // This dialog uses the selected WebView2's profile. It includes
+            // Save Page As results not available through DownloadStarting.
+            browser.OpenDefaultDownloadDialog();
+        }
+        catch (Exception error) when (error is InvalidOperationException
+            or System.Runtime.InteropServices.COMException)
+        {
+            StatusText.Text = "Could not open WebView2 downloads: " + error.Message;
+        }
+    }
+
     private void CancelDownload_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: BrowserDownload item } ||
