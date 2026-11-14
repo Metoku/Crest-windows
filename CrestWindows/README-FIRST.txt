@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- NAVIGATION AND HISTORY TEST BUILD
+CREST WINDOWS PREVIEW -- TAB AND FOLDER SIDEBAR BUILD
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -19,6 +19,17 @@ IMPORTANT LIMITATIONS
   now report their landing URLs and document titles to CrestCore.
 - CrestCore records per-Space browsing history in session.sqlite. Use the
   History toolbar button to view recent visits in the selected Space.
+- The sidebar now groups tabs under Pinned, Saved, and Open and shows folders.
+  Select a folder to expand or collapse it. Right-click a tab to pin, save,
+  rename, move it into a folder or close it. Right-click a folder to rename
+  or remove it while retaining its tabs.
+- The + Folder button creates a folder containing the selected tab.
+- Closing an Open tab puts it in CrestCore's archive (an archive/restore
+  sidebar interface is not implemented yet). Closing a pinned or Saved tab
+  only puts its live webpage away, as CrestCore intends.
+- CrestCore remembers folders, pinning, custom names and section placement
+  across restarts. The sidebar is an early grouped view, not yet a full
+  replica of Crest's pinned tile grid or nested sidebar ordering.
 - Address-bar navigation now uses the active tab when its WebView2 is ready.
 - Back, forward and reload can record new visits when they finish.
 - Full native engine events, single-page app client-side route changes,
@@ -55,6 +66,11 @@ NAVIGATION AND HISTORY TEST
 6. Relaunch the same EXE. The last landed URL, page title, per-Space
    histories and selected tab should still be present.
 7. Use only disposable test cookies to verify website isolation.
+8. Right-click a tab, choose Pin, then Unpin. Save it to Saved and create
+   a folder for it. Rename the folder and expand/collapse it.
+9. Close and reopen Crest, checking that its Saved section and folder remain.
+10. Open a temporary tab and close it. It should disappear from Open, while
+    the existing pinned/saved tabs are retained.
 
 RESET THE DEVELOPMENT PREVIEW
 Close the app, then back up or delete the entire

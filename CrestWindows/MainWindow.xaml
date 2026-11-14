@@ -24,9 +24,28 @@
                       SelectionChanged="SpaceBox_SelectionChanged" />
             <ListView x:Name="TabList" Grid.Row="2"
                       SelectionChanged="TabList_SelectionChanged"
-                      SelectionMode="Single" />
-            <Button Grid.Row="3" Content="+ New tab" Click="NewTab_Click"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                      RightTapped="TabList_RightTapped"
+                      SelectionMode="Single">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="{Binding Indent}">
+                            <FontIcon Glyph="{Binding Glyph}" FontSize="15"/>
+                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <Grid Grid.Row="3" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="+ Tab" Click="NewTab_Click"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                <Button Grid.Column="1" Content="+ Folder" Click="NewFolder_Click"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            </Grid>
         </Grid>
         <Grid Grid.Column="1" RowSpacing="0">
             <Grid.RowDefinitions>

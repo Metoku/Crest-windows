@@ -142,6 +142,55 @@ public sealed class CoreWorkspace : IDisposable
 
     public TabState? SelectedTab => SelectedSpace?.Tabs.FirstOrDefault(tab => tab.Id == ShownTabId);
 
+    public void PinTab(Guid spaceId, Guid tabId) =>
+        Apply(core.Send(new TogglePin(workspaceId, spaceId, tabId)));
+
+    /// Crest defines Saved as a durable tab section and Open as non-durable.
+    /// This does not destroy the live page while merely moving its section.
+    public void SaveTab(Guid spaceId, Guid tabId, bool saved) =>
+        Apply(core.Send(new MoveTab(workspaceId, spaceId, tabId,
+            saved ? TabPlacement.Saved : TabPlacement.Current,
+            FolderId: null, BeforeTabId: null, LeavesSplit: false)));
+
+    public void CloseTab(Guid spaceId, Guid tabId) =>
+        Apply(core.Send(new CloseTab(workspaceId, windowId, spaceId, tabId)));
+
+    public void RenameTab(Guid spaceId, Guid tabId, string? title) =>
+        Apply(core.Send(new RenameTab(workspaceId, spaceId, tabId, title)));
+
+    public void CreateFolder(Guid spaceId, Guid tabId, string title)
+    {
+        var tab = Spaces.First(space => space.Id == spaceId).Tabs.First(tab => tab.Id == tabId);
+        // Pinned cannot contain folders; save it before filing.
+        var placement = tab.Placement == TabPlacement.Pinned ? TabPlacement.Saved : tab.Placement;
+        Apply(core.Send(new CreateFolder(workspaceId, spaceId, Guid.NewGuid(), placement,
+            ParentId: null, Title: title, Color: null, Symbol: null,
+            TabIds: [tabId], LeavesSplits: true)));
+    }
+
+    public void MoveTabToFolder(Guid spaceId, Guid tabId, Guid folderId)
+    {
+        var folder = Spaces.First(space => space.Id == spaceId).Folders.First(folder => folder.Id == folderId);
+        Apply(core.Send(new MoveTab(workspaceId, spaceId, tabId, folder.Location,
+            FolderId: folderId, BeforeTabId: null, LeavesSplit: true)));
+    }
+
+    public void MoveTabOutOfFolder(Guid spaceId, Guid tabId)
+    {
+        var tab = Spaces.First(space => space.Id == spaceId).Tabs.First(tab => tab.Id == tabId);
+        Apply(core.Send(new MoveTab(workspaceId, spaceId, tabId, tab.Placement,
+            FolderId: null, BeforeTabId: null, LeavesSplit: false)));
+    }
+
+    public void CollapseFolder(Guid spaceId, Guid folderId, bool collapsed) =>
+        Apply(core.Send(new CollapseFolder(workspaceId, spaceId, folderId, collapsed)));
+
+    public void RenameFolder(Guid spaceId, Guid folderId, string title) =>
+        Apply(core.Send(new RenameFolder(workspaceId, spaceId, folderId, title)));
+
+    public void DeleteFolder(Guid spaceId, Guid folderId) =>
+        Apply(core.Send(new DeleteFolder(workspaceId, spaceId, folderId)));
+
     #endregion
 
     #region Actions - Changes
@@ -179,6 +228,25 @@ public sealed class CoreWorkspace : IDisposable
                     {
                         Spaces = [.. session.Spaces.Select(space => space.Id == tabs.SpaceId
                             ? space with { Tabs = Merge(space.Tabs, tabs.Updated, tabs.Removed, tabs.Order, tab => tab.Id) }
+                            : space)]
+                    };
+                    break;
+
+                case FoldersChanged folders when folders.WorkspaceId == workspaceId && session is not null:
+                    session = session with
+                    {
+                        Spaces = [.. session.Spaces.Select(space => space.Id == folders.SpaceId
+                            ? space with { Folders = Merge(space.Folders, folders.Updated, folders.Removed, folders.Order, folder => folder.Id) }
+                            : space)]
+                    };
+                    break;
+
+                case ArchiveChanged archive when archive.WorkspaceId == workspaceId && session is not null:
+                    session = session with
+                    {
+                        Spaces = [.. session.Spaces.Select(space => space.Id == archive.SpaceId
+                            ? space with { ArchivedTabs = Merge(space.ArchivedTabs,
+                                archive.Archived, archive.Removed, archive.Order, entry => entry.Tab.Id) }
                             : space)]
                     };
                     break;

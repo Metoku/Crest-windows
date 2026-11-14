@@ -22,11 +22,6 @@ public sealed partial class MainWindow : Window
         public override string ToString() => Name;
     }
 
-    private sealed record TabRow(Guid Id, string Title)
-    {
-        public override string ToString() => Title;
-    }
-
     #endregion
 
     #region Variables
@@ -80,12 +75,9 @@ public sealed partial class MainWindow : Window
             SpaceBox.SelectedItem = SpaceBox.Items.OfType<SpaceRow>()
                 .FirstOrDefault(space => space.Id == core.ShownSpaceId);
 
-            TabList.ItemsSource = core.SelectedSpace?.Tabs
-                .Select(tab => new TabRow(tab.Id, tab.DisplayTitle)).ToArray()
-                ?? [];
-
-            TabList.SelectedItem = (TabList.ItemsSource as TabRow[])?
-                .FirstOrDefault(tab => tab.Id == core.ShownTabId);
+            var entries = SidebarEntries(core.SelectedSpace);
+            TabList.ItemsSource = entries;
+            TabList.SelectedItem = entries.FirstOrDefault(entry => entry.TabId == core.ShownTabId);
         }
         finally
         {
@@ -189,12 +181,21 @@ public sealed partial class MainWindow : Window
 
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (refreshing || TabList.SelectedItem is not TabRow selected || core.ShownSpaceId is not { } spaceId)
+        if (refreshing || TabList.SelectedItem is not SidebarEntry selected
+            || core.ShownSpaceId is not { } spaceId)
             return;
 
         try
         {
-            core.ShowTab(spaceId, selected.Id);
+            if (selected.TabId is { } tabId)
+                core.ShowTab(spaceId, tabId);
+            else if (selected.FolderId is { } folderId
+                && core.SelectedSpace?.Folders.FirstOrDefault(folder => folder.Id == folderId) is { } folder)
+                core.CollapseFolder(spaceId, folderId, !folder.IsCollapsed);
+
+            // Headers are informational. Folder clicks expand/collapse.
+            // Restoring the selected tab prevents a section header from
+            // becoming a fake active tab in the sidebar.
             Refresh();
         }
         catch (Exception error)
@@ -267,7 +268,12 @@ public sealed partial class MainWindow : Window
 
         if (visits.Length == 0)
         {
-            menu.Items.Add(new MenuFlyoutItem { Text = "No recorded visits", IsEnabled = false });
+            menu.Items.Add(new MenuFlyoutItem
+            {
+                Text = "No recorded visits",
+                Icon = new FontIcon { Glyph = "\uE8A4" },
+                IsEnabled = false
+            });
         }
         else
         {
@@ -277,7 +283,8 @@ public sealed partial class MainWindow : Window
                 var title = string.IsNullOrWhiteSpace(visit.Title) ? address : visit.Title;
                 var item = new MenuFlyoutItem
                 {
-                    Text = title.Length > 90 ? title[..90] + "…" : title
+                    Text = title.Length > 90 ? title[..90] + "…" : title,
+                    Icon = new FontIcon { Glyph = "\uE8A5" }
                 };
                 item.Click += (_, _) => Navigate(address);
                 menu.Items.Add(item);
