@@ -9,7 +9,7 @@ on:
       - 'CrestWindowsSmoke/**'
       - '.github/workflows/windows-preview.yml'
   pull_request:
-    branches: [main]
+    branches: [main, windows-core-ci]
     paths:
       - 'CrestWindows/**'
       - '.github/workflows/windows-preview.yml'
