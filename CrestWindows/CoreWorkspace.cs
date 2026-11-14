@@ -14,6 +14,7 @@ public sealed class CoreWorkspace : IDisposable
     private readonly CrestApp core;
     private SessionState? session;
     private WindowState? window;
+    private SearchCatalog? searchCatalog;
     private Guid workspaceId;
     // One-window preview: use a stable device window identity, so CrestCore
     // restores the Space/tab selection instead of creating a new window.
@@ -78,6 +79,11 @@ public sealed class CoreWorkspace : IDisposable
                 "Work", "briefcase.fill", SpaceAccent.Teal)));
             Apply(core.Send(new ShowSpace(windowId, personal.Id)));
         }
+
+        // CrestCore owns installed search providers and each Space's choice.
+        // Restore its real catalog after the persistent session is available
+        // so changing the Windows Settings search engine uses typed intents.
+        Apply(core.Send(new RestoreSearchCatalog(Language: null, Region: null)));
     }
 
     #endregion
@@ -88,6 +94,24 @@ public sealed class CoreWorkspace : IDisposable
         Spaces.FirstOrDefault(space => space.Id == ShownSpaceId);
 
     public void ShowSpace(Guid spaceId) => Apply(core.Send(new ShowSpace(windowId, spaceId)));
+
+    /// The search catalogue is a CrestCore device record, not a Windows
+    /// preference. These are only the device's enabled, default-suitable
+    /// choices; custom providers can be added through Crest later.
+    public IReadOnlyList<SearchProvider> SearchProviders =>
+        searchCatalog?.Enabled.Where(provider => provider.Kind.CanBeDefault).ToArray() ?? [];
+
+    public bool SearchFollowsDefault =>
+        SelectedSpace?.Settings.BrowsingPreferences.FollowsDefaultSearch ?? true;
+
+    public SearchProvider? SelectedSearchProvider =>
+        ShownSpaceId is { } spaceId ? core.Query(new SpaceSearch(workspaceId, spaceId)).Provider : null;
+
+    public void SetSpaceSearchProvider(SearchProvider? provider)
+    {
+        var spaceId = ShownSpaceId ?? throw new InvalidOperationException("No selected Space.");
+        Apply(core.Send(new SetSpaceSearch(workspaceId, spaceId, provider, SuggestionsEnabled: null)));
+    }
 
     #endregion
 
@@ -277,6 +301,10 @@ public sealed class CoreWorkspace : IDisposable
         {
             switch (change)
             {
+                case SearchCatalogChanged catalog:
+                    searchCatalog = catalog.Catalog;
+                    break;
+
                 case WorkspaceOpened opened:
                     workspaceId = opened.WorkspaceId;
                     session = opened.Session;
