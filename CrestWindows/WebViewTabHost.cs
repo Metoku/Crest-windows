@@ -118,13 +118,15 @@ public sealed class WebViewTabHost : IDisposable
 
         var folder = directories.For(profileId);
         Directory.CreateDirectory(folder);
-        var creating = CoreWebView2Environment.CreateAsync(
-            browserExecutableFolder: null,
-            userDataFolder: folder,
-            options: null);
+        var creating = CreateEnvironmentAsync(folder);
         environments.Add(profileId, creating);
         return creating;
     }
+
+    // WinUI 3 uses the WinRT async environment factory. Await it in this
+    // method so the adapter caches an ordinary .NET Task per Crest profile.
+    private static async Task<CoreWebView2Environment> CreateEnvironmentAsync(string folder) =>
+        await CoreWebView2Environment.CreateWithOptionsAsync(null, folder, null);
 
     private async Task InitializeAsync(TabPage page)
     {
