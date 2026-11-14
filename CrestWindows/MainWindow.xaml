@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="CrestWindows.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Crest Windows Preview">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+    <Grid ColumnSpacing="0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid Grid.Column="0" Background="{ThemeResource LayerFillColorDefaultBrush}" Padding="12" RowSpacing="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Crest Preview" FontSize="21" FontWeight="SemiBold" Margin="6,8,0,4" />
+            <ComboBox x:Name="SpaceBox" Grid.Row="1" Header="Workspace" HorizontalAlignment="Stretch"
+                      SelectionChanged="SpaceBox_SelectionChanged" />
+            <ListView x:Name="TabList" Grid.Row="2"
+                      SelectionChanged="TabList_SelectionChanged"
+                      SelectionMode="Single" />
+            <Button Grid.Row="3" Content="+ New tab" Click="NewTab_Click"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        </Grid>
+        <Grid Grid.Column="1" RowSpacing="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Margin="8" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="&#x2190;" Click="Back_Click" ToolTipService.ToolTip="Back"/>
+                <Button Grid.Column="1" Content="&#x2192;" Click="Forward_Click" ToolTipService.ToolTip="Forward"/>
+                <Button Grid.Column="2" Content="&#x21BB;" Click="Reload_Click" ToolTipService.ToolTip="Reload"/>
+                <TextBox x:Name="UrlBox" Grid.Column="3" PlaceholderText="Search or enter an address"
+                         KeyDown="UrlBox_KeyDown"/>
+                <Button Grid.Column="4" Content="Go" Click="Go_Click" />
+            </Grid>
+            <WebView2 x:Name="BrowserView" Grid.Row="1"/>
+            <TextBlock x:Name="StatusText" Grid.Row="2" Text="Windows shell preview — not yet CrestCore-integrated"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Padding="12,5" FontSize="11"/>
+        </Grid>
+    </Grid>
+</Window>
