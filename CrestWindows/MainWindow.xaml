@@ -16,19 +16,53 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <TextBlock Text="Crest Preview" FontSize="21" FontWeight="SemiBold" Margin="6,8,0,4" />
             <ComboBox x:Name="SpaceBox" Grid.Row="1" Header="Space" HorizontalAlignment="Stretch"
                       SelectionChanged="SpaceBox_SelectionChanged" />
-            <ListView x:Name="TabList" Grid.Row="2"
+            <StackPanel x:Name="PinnedPanel" Grid.Row="2" Visibility="Collapsed" Spacing="4" Padding="0,6,0,8">
+                <TextBlock Text="FAVORITES" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="8,0,0,0"/>
+                <GridView x:Name="PinnedList" SelectionMode="Single" MaxHeight="260"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                          CanDragItems="True" CanReorderItems="False" AllowDrop="True"
+                          DragItemsStarting="Sidebar_DragItemsStarting"
+                          DragItemsCompleted="Sidebar_DragItemsCompleted"
+                          DragOver="Sidebar_DragOver" Drop="Sidebar_Drop"
+                          RightTapped="TabList_RightTapped"
+                          SelectionChanged="PinnedList_SelectionChanged">
+                    <GridView.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Width="55" Spacing="3" ToolTipService.ToolTip="{Binding Label}">
+                                <Border Width="41" Height="41" CornerRadius="9"
+                                        HorizontalAlignment="Center"
+                                        Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <TextBlock Text="{Binding Initial}" FontSize="18" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="{Binding Label}" MaxLines="1"
+                                           FontSize="10" TextTrimming="CharacterEllipsis"
+                                           TextAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </GridView.ItemTemplate>
+                </GridView>
+            </StackPanel>
+            <ListView x:Name="TabList" Grid.Row="3"
                       SelectionChanged="TabList_SelectionChanged"
                       RightTapped="TabList_RightTapped"
+                      CanDragItems="True" CanReorderItems="False" AllowDrop="True"
+                      DragItemsStarting="Sidebar_DragItemsStarting"
+                      DragItemsCompleted="Sidebar_DragItemsCompleted"
+                      DragOver="Sidebar_DragOver" Drop="Sidebar_Drop"
                       SelectionMode="Single">
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="{Binding Indent}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="{Binding Indent}"
+                                    ToolTipService.ToolTip="{Binding Label}">
                             <FontIcon Glyph="{Binding Glyph}" FontSize="15"/>
                             <TextBlock Text="{Binding Label}" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"/>
@@ -36,7 +70,7 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-            <Grid Grid.Row="3" ColumnSpacing="8">
+            <Grid Grid.Row="4" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
