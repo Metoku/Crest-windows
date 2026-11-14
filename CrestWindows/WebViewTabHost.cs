@@ -62,6 +62,9 @@ public sealed class WebViewTabHost : IDisposable
     public event Action<Guid, Uri?, string?, bool>? NavigationCompleted;
     public event Action<Guid, Uri?, string>? DocumentTitleChanged;
     public event Action<Guid, string, BitmapImage?>? FaviconChanged;
+    /// Download operations stay attached to the exact tab they originated
+    /// from, even after another page or Space becomes active.
+    public event Action<Guid, CoreWebView2DownloadOperation>? DownloadStarted;
 
     public WebView2? ActiveView =>
         activeTabId is { } id && pages.TryGetValue(id, out var page) && page.IsReady ? page.View : null;
@@ -343,6 +346,16 @@ public sealed class WebViewTabHost : IDisposable
         };
 
         page.View.CoreWebView2.FaviconChanged += (_, _) => _ = ReadFaviconAsync(page);
+
+        page.View.CoreWebView2.DownloadStarting += (_, args) =>
+        {
+            if (disposed) return;
+            // Keep the browser's normal download path and default
+            // save/security UI. Never set ResultFilePath: replacing an
+            // existing path can silently overwrite a user's file.
+            // This Windows preview only observes the transfer.
+            DownloadStarted?.Invoke(page.TabId, args.DownloadOperation);
+        };
 
         page.IsReady = true;
         Navigate(page);
