@@ -19,8 +19,16 @@ WHAT IS NEW
 - Drag the narrow vertical divider between the two webpages to resize them.
   CrestCore saves the two column-width shares with the window record.
 - Click Unsplit to separate the tabs without closing either page.
-- A Downloads button in the toolbar shows files being downloaded by WebView2
-  in the currently selected Space, with received bytes, progress, and status.
+- A Downloads button in the toolbar tracks REGULAR file transfers received
+  through WebView2 DownloadStarting, with bytes, progress and status.
+- The browser's Save Page As action (such as saving Gmail as a .html file)
+  is a separate WebView2 feature and does NOT raise DownloadStarting.
+  Consequently, the custom Downloads list can be empty while WebView2's own
+  downloads flyout shows saved pages. This is expected, not lost files.
+- Use "View saved pages and browser downloads" inside Crest's Downloads
+  flyout to open WebView2's native download list for the active Space.
+  The native list contains Save Page As items and allows inspecting them.
+  Do not confuse it with the custom per-Space file-transfer progress list.
 - Downloads started in Personal or Work remain associated with their original
   Space even when you switch Spaces or tabs. Downloads in another Space do
   not appear in this Space's Downloads panel.
@@ -169,8 +177,10 @@ SPLIT VIEW TEST
 8. Verify other Spaces still show their own tabs and isolated cookies.
 
 DOWNLOADS TEST
-1. Open a regular tab in Personal and download a small file from a trusted
-   website (for example the source ZIP from a public GitHub repository).
+1. Open a regular tab in Personal and click a real file-download link,
+   for example a public GitHub repository's Code > Download ZIP link.
+   Do NOT use right-click > Save As or Ctrl+S: saving the entire webpage
+   uses WebView2's separate Save Page As feature, not DownloadStarting.
 2. Open Downloads in Crest's toolbar. The filename and progress should
    appear; after completion it should show Completed.
 3. Click Open folder and verify File Explorer opens the containing directory.
@@ -183,3 +193,7 @@ DOWNLOADS TEST
    downloaded files should remain in their saved destination.
 7. Downloads should continue normally in a two-pane Split View, with each
    transfer attributed to the correct originating Space.
+8. To check a saved .html webpage, use Ctrl+S or Save Page As, then open
+   Crest Downloads > View saved pages and browser downloads. The native
+   WebView2 list should show the saved page, even if Crest's custom file
+   download list is empty.
