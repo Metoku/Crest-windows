@@ -4,10 +4,9 @@ using Microsoft.Web.WebView2.Core;
 
 namespace CrestWindows;
 
-/// An engine-view adapter for CrestCore tabs. One WebView2 is kept alive per
-/// tab, and each distinct CrestCore ProfileId receives a different WebView2
-/// user data folder. This preview does not yet implement Crest's engine event
-/// bridge, storage, or session restoration.
+/// A preview engine-view adapter. Each tab keeps its own live WebView2,
+/// and each distinct CrestCore ProfileId gets a stable data directory. The
+/// browser engine-to-core navigation bridge is still under development.
 public sealed class WebViewTabHost : IDisposable
 {
     #region Static Variables
@@ -52,17 +51,13 @@ public sealed class WebViewTabHost : IDisposable
 
     #region Constructors
 
-    public WebViewTabHost(Grid host)
+    public WebViewTabHost(Grid host, string profileRoot)
     {
         this.host = host ?? throw new ArgumentNullException(nameof(host));
 
-        // The core's preview session is memory-only. Use a fresh folder tree
-        // per run so website data from a prior preview cannot silently attach
-        // to the new, randomly identified CrestCore Spaces.
-        var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CrestWindowsPreview", "Sessions", Guid.NewGuid().ToString("N"));
-        directories = new SpaceProfileDirectories(root);
+        // ProfileId comes from CrestCore's durable session. Reusing the same
+        // id on restart restores only its own cookies and site data.
+        directories = new SpaceProfileDirectories(profileRoot);
     }
 
     #endregion
@@ -166,16 +161,10 @@ public sealed class WebViewTabHost : IDisposable
         pages.Clear();
         environments.Clear();
 
-        // The browser process may hold open files briefly after the last
-        // control closes. Failed cleanup leaves one session-scoped folder
-        // rather than merging data across future runs.
-        try
-        {
-            if (Directory.Exists(directories.Root))
-                Directory.Delete(directories.Root, recursive: true);
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        // Persist the user-data directories. They are owned by CrestCore's
+        // stable ProfileIds, not by individual window or page lifetimes. The
+        // user may remove the preview's Profiles directory manually when
+        // they want a complete website-data reset.
     }
 
     #endregion
