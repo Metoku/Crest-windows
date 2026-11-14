@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- SESSION RESTORE TEST BUILD
+CREST WINDOWS PREVIEW -- NAVIGATION AND HISTORY TEST BUILD
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -15,11 +15,15 @@ WHAT IS NEW
 - Cookies and other website data can now survive restart *in the same Space*.
 
 IMPORTANT LIMITATIONS
-- Hyperlinks and redirects followed INSIDE a webpage are not yet reported to
-  CrestCore. They may not be restored to their latest URL after restarting.
-  Enter addresses through Crest's address bar to test session restoration.
-- Browsing history, page titles, true Crest Chromium integration, browser
-  import and password management are NOT implemented.
+- Successful HTTP(S) link clicks, redirects, and address-bar navigation
+  now report their landing URLs and document titles to CrestCore.
+- CrestCore records per-Space browsing history in session.sqlite. Use the
+  History toolbar button to view recent visits in the selected Space.
+- Address-bar navigation now uses the active tab when its WebView2 is ready.
+- Back, forward and reload can record new visits when they finish.
+- Full native engine events, single-page app client-side route changes,
+  complete back/forward restoration after restart, native Chromium
+  integration, browser import and password management are NOT implemented.
 - This preview is not security-audited. Automated tests check that different
   CrestCore ProfileIds use different WebView2 folders; test cookie isolation
   manually with disposable test cookies, not real logins.
@@ -40,14 +44,17 @@ HOW TO START
 4. Send the error or the startup log at:
    %LOCALAPPDATA%\CrestWindowsPreview\startup.log
 
-RESTORE TEST
-1. Open the preview. In Personal, enter https://example.org via the address
-   bar and open another tab with https://example.net.
-2. In Work, enter https://example.com in its address bar.
-3. Switch back to Personal, select the example.net tab, then CLOSE the app.
-4. Reopen CrestWindows.exe. Check that all tabs, the Work and Personal Spaces,
-   and the selected Personal tab remain.
-5. Use test-only cookies to confirm that Work does not see Personal's cookies.
+NAVIGATION AND HISTORY TEST
+1. Open Personal. Navigate to https://example.org using the address bar.
+2. Click a link to another page on the same site, or follow a redirect.
+   The selected tab and address bar should reflect the final URL.
+3. Open History: the visited URL should appear with its page title.
+4. Navigate in Work to https://example.com, then open History there. Work
+   should not show Personal's visits.
+5. Return to Personal, select the linked page and close CrestWindows.exe.
+6. Relaunch the same EXE. The last landed URL, page title, per-Space
+   histories and selected tab should still be present.
+7. Use only disposable test cookies to verify website isolation.
 
 RESET THE DEVELOPMENT PREVIEW
 Close the app, then back up or delete the entire
