@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- TWO-PANE SPLIT VIEW
+CREST WINDOWS PREVIEW -- DOWNLOADS MANAGER
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -19,6 +19,19 @@ WHAT IS NEW
 - Drag the narrow vertical divider between the two webpages to resize them.
   CrestCore saves the two column-width shares with the window record.
 - Click Unsplit to separate the tabs without closing either page.
+- A Downloads button in the toolbar shows files being downloaded by WebView2
+  in the currently selected Space, with received bytes, progress, and status.
+- Downloads started in Personal or Work remain associated with their original
+  Space even when you switch Spaces or tabs. Downloads in another Space do
+  not appear in this Space's Downloads panel.
+- WebView2 retains control of the save prompt, download folder, and browser
+  safety decisions. Crest never overrides ResultFilePath, silently overwrites
+  an existing file, or automatically opens a downloaded executable.
+- You can cancel a transfer from the Downloads panel. After successful
+  completion, Open folder launches the containing folder in File Explorer.
+- Recent download rows are session-only (up to 50 per window); the actual
+  saved files remain on disk. Interrupted transfers are not automatically
+  resumed when the preview closes.
 - Both split membership and the divider ratio should survive restarting.
 - The Windows prototype displays up to two split members. Advanced splits,
   pinned/saved tab copy semantics, popup integration and split drag targets
@@ -154,3 +167,19 @@ SPLIT VIEW TEST
 6. Return to the Space: both split pages and your width ratio should restore.
 7. Click Unsplit: both tabs should remain available independently.
 8. Verify other Spaces still show their own tabs and isolated cookies.
+
+DOWNLOADS TEST
+1. Open a regular tab in Personal and download a small file from a trusted
+   website (for example the source ZIP from a public GitHub repository).
+2. Open Downloads in Crest's toolbar. The filename and progress should
+   appear; after completion it should show Completed.
+3. Click Open folder and verify File Explorer opens the containing directory.
+   Crest should NOT execute the downloaded file.
+4. Start another download and use Cancel before it finishes. Its status
+   should change to Canceled or Interrupted.
+5. Start a download in Work. Switch to Personal: Work's transfer must NOT
+   appear in Personal's list, even if it is still downloading.
+6. Restart Crest. The download list is expected to reset, but completed
+   downloaded files should remain in their saved destination.
+7. Downloads should continue normally in a two-pane Split View, with each
+   transfer attributed to the correct originating Space.
