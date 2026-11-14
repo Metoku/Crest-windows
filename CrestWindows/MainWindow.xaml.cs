@@ -47,6 +47,8 @@ public sealed partial class MainWindow : Window
         browserTabs.NavigationCompleted += BrowserTabs_NavigationCompleted;
         browserTabs.DocumentTitleChanged += BrowserTabs_DocumentTitleChanged;
         browserTabs.FaviconChanged += BrowserTabs_FaviconChanged;
+        browserTabs.TabActivated += BrowserTabs_TabActivated;
+        browserTabs.SplitRatioCommitted += BrowserTabs_SplitRatioCommitted;
         BrowserHost.Loaded += (_, _) =>
         {
             browserHostLoaded = true;
@@ -88,6 +90,14 @@ public sealed partial class MainWindow : Window
             var entries = SidebarEntries(core.SelectedSpace);
             TabList.ItemsSource = entries;
             TabList.SelectedItem = entries.FirstOrDefault(entry => entry.TabId == core.ShownTabId);
+
+            var split = core.CurrentCards?.SplitGroupId is not null;
+            SplitButton.Content = split ? "Unsplit" : "Split";
+            SplitButton.IsEnabled = split || (core.SelectedTab is { } chosen &&
+                chosen.Placement == CrestCore.Contracts.TabPlacement.Current && !chosen.IsStartPage &&
+                core.SelectedSpace?.Tabs.Any(tab => tab.Id != chosen.Id && !tab.IsStartPage &&
+                    tab.Placement == CrestCore.Contracts.TabPlacement.Current &&
+                    tab.SplitGroupId is null) == true);
         }
         finally
         {
@@ -147,27 +157,34 @@ public sealed partial class MainWindow : Window
         Refresh();
     }
 
-    /// A tab gets its own live WebView2 instance, so switching between tabs
-    /// doesn't reset navigation, forms, scroll position or page JavaScript.
+    /// The saved CrestCore WindowState determines the cards in the browser.
+    /// WebView2 owns the live pages, but never invents its own split membership.
     private async void ShowSelectedPage()
     {
         if (!browserHostLoaded || core.SelectedSpace is not { } space || core.SelectedTab is not { } tab)
             return;
 
+        var selectedId = core.ShownTabId;
+        var cards = core.CurrentVisibleTabs.Take(2).Select(visible =>
+            new WebViewTabHost.TabViewport(visible.Id, space.ProfileId, visible.Url)).ToArray();
+
         try
         {
-            await browserTabs.ShowAsync(tab.Id, space.ProfileId, tab.Url);
-            if (core.ShownTabId != tab.Id)
+            await browserTabs.ShowCardsAsync(cards, selectedId, core.CurrentFirstColumnShare);
+            if (core.ShownTabId != selectedId || windowClosed)
                 return;
 
             UrlBox.Text = browserTabs.ActiveView?.Source?.AbsoluteUri ?? tab.Url ?? HomeUrl;
-            StatusText.Text = core.WasRestored
-                ? "CrestCore session restored • Space profiles persisted (preview)"
-                : "New CrestCore session saved • Space profiles persisted (preview)";
+            StatusText.Text = cards.Length == 2
+                ? "Split View • drag the divider to resize • widths saved in CrestCore"
+                : core.WasRestored
+                    ? "CrestCore session restored • Space profiles persisted (preview)"
+                    : "New CrestCore session saved • Space profiles persisted (preview)";
         }
         catch (Exception error)
         {
-            StatusText.Text = "WebView2 could not initialize: " + error.Message;
+            if (!windowClosed)
+                StatusText.Text = "WebView2 could not initialize: " + error.Message;
         }
     }
 
