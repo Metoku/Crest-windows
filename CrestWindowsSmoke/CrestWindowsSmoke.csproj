@@ -10,5 +10,6 @@
     <Compile Include="../CrestWindows/CoreWorkspace.cs" Link="CoreWorkspace.cs" />
     <Compile Include="../CrestWindows/SpaceProfileDirectories.cs" Link="SpaceProfileDirectories.cs" />
     <Compile Include="../CrestWindows/WindowPresentationStateStore.cs" Link="WindowPresentationStateStore.cs" />
+    <Compile Include="../CrestWindows/WindowAppearanceStore.cs" Link="WindowAppearanceStore.cs" />
   </ItemGroup>
 </Project>
