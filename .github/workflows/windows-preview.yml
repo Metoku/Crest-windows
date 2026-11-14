@@ -3,14 +3,14 @@ name: Crest Windows Browser Preview
 on:
   workflow_dispatch:
   push:
-    branches: [windows-core-ci, windows-session-persistence, windows-navigation-history, windows-sidebar-management, windows-sidebar-dragdrop, windows-favicons, windows-window-state-polish, windows-split-view, windows-downloads]
+    branches: [windows-core-ci, windows-session-persistence, windows-navigation-history, windows-sidebar-management, windows-sidebar-dragdrop, windows-favicons, windows-window-state-polish, windows-split-view, windows-downloads, windows-save-as-downloads-clarity]
     paths:
       - 'CrestWindows/**'
       - 'CrestWindowsSmoke/**'
       - 'CrestCore/src/CrestCore/**'
       - '.github/workflows/windows-preview.yml'
   pull_request:
-    branches: [main, windows-core-ci, windows-session-persistence, windows-navigation-history, windows-sidebar-management, windows-sidebar-dragdrop, windows-favicons, windows-window-state-polish, windows-split-view]
+    branches: [main, windows-core-ci, windows-session-persistence, windows-navigation-history, windows-sidebar-management, windows-sidebar-dragdrop, windows-favicons, windows-window-state-polish, windows-split-view, windows-downloads]
     paths:
       - 'CrestWindows/**'
       - 'CrestWindowsSmoke/**'
