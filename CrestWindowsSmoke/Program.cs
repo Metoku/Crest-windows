@@ -22,6 +22,19 @@ try
     Require(new WindowPresentationStateStore(presentationPath).ReadMaximized(),
         "A maximized window state must survive another application instance.");
 
+    var appearancePath = Path.Combine(storage, "window-appearance.state");
+    var appearance = new WindowAppearanceStore(appearancePath);
+    Require(appearance.Read() == WindowAppearanceStore.Appearance.System,
+        "Windows appearance must follow the system on first launch.");
+    appearance.Save(WindowAppearanceStore.Appearance.Light);
+    Require(new WindowAppearanceStore(appearancePath).Read() ==
+        WindowAppearanceStore.Appearance.Light,
+        "Windows appearance preference must survive restart.");
+    appearance.Save(WindowAppearanceStore.Appearance.Dark);
+    Require(new WindowAppearanceStore(appearancePath).Read() ==
+        WindowAppearanceStore.Appearance.Dark,
+        "Windows appearance must preserve the chosen Dark mode.");
+
     using (var workspace = new CoreWorkspace(storage))
     {
         Require(!workspace.WasRestored, "A brand-new core must install an initial session.");
@@ -37,6 +50,22 @@ try
         Require(workspace.Spaces.Count == 2, "Both template Spaces should exist.");
         Require(personal.ProfileId != work.ProfileId,
             "CrestCore must give independent Spaces distinct browsing profiles.");
+
+        // Search preferences are CrestCore-owned and per-Space. Choosing
+        // DuckDuckGo for Personal must not change Work's search engine.
+        Require(workspace.SearchProviders.Any(provider => provider.Name == "duckDuckGo"),
+            "CrestCore should publish its enabled search engines.");
+        var duckDuckGo = workspace.SearchProviders.Single(provider => provider.Name == "duckDuckGo");
+        workspace.SetSpaceSearchProvider(duckDuckGo);
+        Require(workspace.SelectedSearchProvider?.Name == "duckDuckGo" && !workspace.SearchFollowsDefault,
+            "Personal must use the chosen CrestCore search engine.");
+        Require(workspace.ResolveAddressInput("crest windows search preference test")?
+            .Contains("duckduckgo", StringComparison.OrdinalIgnoreCase) == true,
+            "Address resolution must use Personal's new search engine.");
+        workspace.ShowSpace(work.Id);
+        Require(workspace.SelectedSearchProvider?.Name == "google" && workspace.SearchFollowsDefault,
+            "Work must continue to follow the default search engine.");
+        workspace.ShowSpace(personal.Id);
 
         var directories = new SpaceProfileDirectories(Path.Combine(storage, "Profiles"));
         Require(directories.For(personal.ProfileId) == directories.For(personal.ProfileId),
@@ -191,6 +220,9 @@ try
     using (var reopened = new CoreWorkspace(storage))
     {
         Require(reopened.WasRestored, "The second launch must open the durable session.");
+        Require(reopened.SelectedSearchProvider?.Name == "duckDuckGo" &&
+            !reopened.SearchFollowsDefault,
+            "Personal's search preference must survive restarting CrestCore.");
         var personal = reopened.Spaces.Single(space => space.Settings.Name == "Personal");
         var work = reopened.Spaces.Single(space => space.Settings.Name == "Work");
 
