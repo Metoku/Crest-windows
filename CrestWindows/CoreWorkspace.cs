@@ -40,19 +40,22 @@ public sealed class CoreWorkspace : IDisposable
         // it never touches a person's existing Crest/Arc/Chromium data.
         core = new CrestApp(new AppConfiguration(StorageDirectory, DevicePlatform.Desktop));
 
-        // First startup: install the normal Crest initial Space in SQLite.
-        // Later startups: opening the stored workspace preserves the core's
-        // Space, tab and browsing-profile identities.
-        var database = Path.Combine(StorageDirectory, "session.sqlite");
-        WasRestored = File.Exists(database) && new FileInfo(database).Length > 0;
-        if (!WasRestored)
+        // Distinguish an existing session from the empty SQLite file that
+        // CrestApp creates on first use. Never infer this from File.Exists:
+        // an empty initialized database is already on disk.
+        try
         {
+            Apply(core.Send(new OpenWorkspace(WorkspaceKind.Persistent, Seed: null)));
+            WasRestored = true;
+        }
+        catch (Rejected refused) when (refused.Rejection is NoStoredSession)
+        {
+            WasRestored = false;
             var seed = core.Query(new FirstInstallSession()) with { DisposableSeedMarker = null };
             Apply(core.Send(new AdoptLegacySession(
                 new LegacySession(Core: null, WholeGraph: null, History: [], Journal: null), seed)));
+            Apply(core.Send(new OpenWorkspace(WorkspaceKind.Persistent, Seed: null)));
         }
-
-        Apply(core.Send(new OpenWorkspace(WorkspaceKind.Persistent, Seed: null)));
         if (session?.Spaces.FirstOrDefault() is not { } initial)
             throw new InvalidOperationException("CrestCore did not open a persistent Space.");
 
