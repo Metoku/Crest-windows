@@ -36,11 +36,8 @@ public sealed partial class MainWindow
             presenter.Maximize();
 
         AppWindow.Changed += AppWindow_Changed;
-        Closed += (_, _) =>
-        {
-            SavePresentationState();
-            AppWindow.Changed -= AppWindow_Changed;
-        };
+        // AppWindow.Closing runs before the native HWND is destroyed.
+        AppWindow.Closing += (_, _) => SavePresentationState();
         trackingPresentation = true;
     }
 
