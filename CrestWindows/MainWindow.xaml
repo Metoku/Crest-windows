@@ -128,8 +128,16 @@
                         <Flyout>
                             <StackPanel Width="390" Spacing="9" Loaded="DownloadsPanel_Loaded">
                                 <TextBlock Text="Downloads" FontSize="17" FontWeight="SemiBold"/>
-                                <TextBlock x:Name="NoDownloadsText" Text="No downloads in this Space."
+                                <TextBlock x:Name="NoDownloadsText"
+                                           Text="No regular file downloads tracked in this Space."
+                                           TextWrapping="Wrap"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="Save Page As uses WebView2's separate saved-page manager."
+                                           FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Button Content="View saved pages and browser downloads"
+                                        Click="ShowBrowserDownloads_Click"
+                                        ToolTipService.ToolTip="Open the WebView2 downloads list for this Space"/>
                                 <ListView x:Name="DownloadsList" SelectionMode="None"
                                           MaxHeight="420" ScrollViewer.VerticalScrollBarVisibility="Auto">
                                     <ListView.ItemTemplate>
