@@ -104,9 +104,33 @@ public sealed class CoreWorkspace : IDisposable
             AfterTabId: ShownTabId, Shows: true)));
     }
 
-    /// Crest's own address rules choose whether the input is a URL or search.
-    /// OpenAddress uses the shown Start Page, or opens a new tab otherwise.
-    /// Later, an engine adapter will report in-tab navigations to the core.
+    /// Resolve the address bar input under the selected Space's real search
+    /// preferences without changing its tab. WebView2 navigates the live page
+    /// and reports the committed address when that navigation succeeds.
+    public string? ResolveAddressInput(string input)
+    {
+        var spaceId = ShownSpaceId;
+        return spaceId is { } id
+            ? core.Query(new ResolveAddress(workspaceId, id, input)).Url
+            : null;
+    }
+
+    /// The temporary WebView2 host reports the URL/title actually reached.
+    /// CrestCore validates and persists the tab/history state; Windows never
+    /// edits the session records directly.
+    public bool ReportNavigation(Guid tabId, string url, string? title, bool newVisit)
+    {
+        var space = Spaces.FirstOrDefault(space => space.Tabs.Any(tab => tab.Id == tabId));
+        if (space is null) return false;
+        Apply(core.Send(new ReportHostedNavigation(workspaceId, space.Id, tabId, url, title, newVisit)));
+        return true;
+    }
+
+    /// The Space's persistent browsing history, newest visit first.
+    public IReadOnlyList<HistoryEntryState> CurrentHistory => SelectedSpace?.History ?? [];
+
+    /// Crest's own address rules choose whether input is a URL or a search.
+    /// This opens a tab when no live WebView2 is ready for in-tab navigation.
     public bool OpenAddress(string input)
     {
         var spaceId = ShownSpaceId ?? throw new InvalidOperationException("No Space is open.");
@@ -159,12 +183,43 @@ public sealed class CoreWorkspace : IDisposable
                     };
                     break;
 
+                case HistoryChanged history when history.WorkspaceId == workspaceId && session is not null:
+                    session = session with
+                    {
+                        Spaces = [.. session.Spaces.Select(space => space.Id == history.SpaceId
+                            ? space with { History = MergeHistory(space.History, history) }
+                            : space)]
+                    };
+                    break;
+
                 case WindowChanged changed when changed.Window.Id == windowId:
                     window = changed.Window;
                     break;
             }
         }
         core.EndTurn();
+    }
+
+    /// HistoryChanged records updated visits at the front (unlike tab
+    /// changes, which retain their old positions), then optionally orders all
+    /// ids explicitly.
+    private static IReadOnlyList<HistoryEntryState> MergeHistory(
+        IReadOnlyList<HistoryEntryState> previous, HistoryChanged change)
+    {
+        var changedIds = change.Recorded.Select(entry => entry.Id).ToHashSet();
+        var removedIds = change.Removed.ToHashSet();
+        var result = change.Recorded
+            .Concat(previous.Where(entry => !changedIds.Contains(entry.Id) && !removedIds.Contains(entry.Id)))
+            .ToList();
+
+        if (change.Order is not null)
+        {
+            var positions = change.Order.Select((id, position) => (id, position))
+                .ToDictionary(item => item.id, item => item.position);
+            result.Sort((left, right) => positions.GetValueOrDefault(left.Id, int.MaxValue)
+                .CompareTo(positions.GetValueOrDefault(right.Id, int.MaxValue)));
+        }
+        return result;
     }
 
     private static IReadOnlyList<T> Merge<T>(IReadOnlyList<T> oldRows, IReadOnlyList<T> incoming,
