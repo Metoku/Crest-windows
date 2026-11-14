@@ -182,6 +182,13 @@ public sealed class CoreWorkspace : IDisposable
             FolderId: null, BeforeTabId: null, LeavesSplit: false)));
     }
 
+    /// Drop a tab within a Space, including a section, a folder or before
+    /// another tab. The core validates capacity, split rules and ordering.
+    public void DropTab(Guid spaceId, Guid tabId, TabPlacement placement,
+        Guid? folderId = null, Guid? beforeTabId = null) =>
+        Apply(core.Send(new MoveTab(workspaceId, spaceId, tabId, placement,
+            FolderId: folderId, BeforeTabId: beforeTabId, LeavesSplit: !placement.HoldsSplits)));
+
     public void CollapseFolder(Guid spaceId, Guid folderId, bool collapsed) =>
         Apply(core.Send(new CollapseFolder(workspaceId, spaceId, folderId, collapsed)));
 
