@@ -117,6 +117,17 @@ public sealed class WebViewTabHost : IDisposable
         await page.Initialization;
     }
 
+    /// A dismissed tab's live engine must not stay attached after CrestCore
+    /// archives the tab or puts away its saved/pinned page. Future selection
+    /// of a retained durable tab creates a fresh engine for its saved URL.
+    public void ReleaseTab(Guid tabId)
+    {
+        if (!pages.Remove(tabId, out var page)) return;
+        if (activeTabId == tabId) activeTabId = null;
+        page.View.Close();
+        host.Children.Remove(page.View);
+    }
+
     /// Navigate the currently live tab. Its successful navigation report
     /// will update CrestCore; no new tab needs to be created.
     public bool NavigateActive(string url)
