@@ -75,6 +75,11 @@ public sealed partial class MainWindow : Window
             SpaceBox.SelectedItem = SpaceBox.Items.OfType<SpaceRow>()
                 .FirstOrDefault(space => space.Id == core.ShownSpaceId);
 
+            var pinned = PinnedEntries(core.SelectedSpace);
+            PinnedPanel.Visibility = pinned.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+            PinnedList.ItemsSource = pinned;
+            PinnedList.SelectedItem = pinned.FirstOrDefault(entry => entry.TabId == core.ShownTabId);
+
             var entries = SidebarEntries(core.SelectedSpace);
             TabList.ItemsSource = entries;
             TabList.SelectedItem = entries.FirstOrDefault(entry => entry.TabId == core.ShownTabId);
@@ -171,6 +176,23 @@ public sealed partial class MainWindow : Window
         try
         {
             core.ShowSpace(selected.Id);
+            Refresh();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = error.Message;
+        }
+    }
+
+    private void PinnedList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (refreshing || PinnedList.SelectedItem is not SidebarEntry { TabId: { } tabId }
+            || core.ShownSpaceId is not { } spaceId)
+            return;
+
+        try
+        {
+            core.ShowTab(spaceId, tabId);
             Refresh();
         }
         catch (Exception error)
