@@ -241,6 +241,16 @@ public sealed class CoreWorkspace : IDisposable
                     };
                     break;
 
+                case ArchiveChanged archive when archive.WorkspaceId == workspaceId && session is not null:
+                    session = session with
+                    {
+                        Spaces = [.. session.Spaces.Select(space => space.Id == archive.SpaceId
+                            ? space with { ArchivedTabs = Merge(space.ArchivedTabs,
+                                archive.Archived, archive.Removed, archive.Order, entry => entry.Tab.Id) }
+                            : space)]
+                    };
+                    break;
+
                 case HistoryChanged history when history.WorkspaceId == workspaceId && session is not null:
                     session = session with
                     {
