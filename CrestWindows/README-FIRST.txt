@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- FAVICON AND WINDOW-STATE POLISH
+CREST WINDOWS PREVIEW -- TWO-PANE SPLIT VIEW
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -12,6 +12,17 @@ WHAT IS NEW
   rooted at %LOCALAPPDATA%\CrestWindowsPreview\Profiles\
 - Each tab still has its own live WebView2 while the app is running. Switching
   between tabs keeps the live page instead of always reloading it.
+- Use Split in the toolbar to choose another Open tab in the current Space.
+  CrestCore keeps the two pages together as a Split View.
+- Both webpages stay live side by side. Click either page to make it the
+  active address-bar/Back/Forward/Reload target.
+- Drag the narrow vertical divider between the two webpages to resize them.
+  CrestCore saves the two column-width shares with the window record.
+- Click Unsplit to separate the tabs without closing either page.
+- Both split membership and the divider ratio should survive restarting.
+- The Windows prototype displays up to two split members. Advanced splits,
+  pinned/saved tab copy semantics, popup integration and split drag targets
+  are not supported yet. Split requires two separate ordinary Open tabs.
 - Cookies and other website data can now survive restart *in the same Space*.
 
 IMPORTANT LIMITATIONS
@@ -132,3 +143,14 @@ WINDOW-STATE CHECK
 3. Relaunch: it should remain restored, not force maximized.
 4. Maximize the window, close, and relaunch. It should open maximized.
 5. The Favorites icon should look sharper than the earlier 26px enlargement.
+
+SPLIT VIEW TEST
+1. In one Space, open two different webpages as regular Open tabs.
+2. Select the first and click Split. Choose the second tab from the menu.
+3. Verify both webpages remain visible and independently scroll and play.
+4. Click the right webpage; Back/Forward/Reload and the address bar should
+   now operate on the right page. Click left to switch the active target.
+5. Drag the divider to change widths, then close and reopen CrestWindows.exe.
+6. Return to the Space: both split pages and your width ratio should restore.
+7. Click Unsplit: both tabs should remain available independently.
+8. Verify other Spaces still show their own tabs and isolated cookies.
