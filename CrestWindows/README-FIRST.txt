@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- TAB AND FOLDER SIDEBAR BUILD
+CREST WINDOWS PREVIEW -- FAVORITES GRID AND DRAG AND DROP
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -19,8 +19,15 @@ IMPORTANT LIMITATIONS
   now report their landing URLs and document titles to CrestCore.
 - CrestCore records per-Space browsing history in session.sqlite. Use the
   History toolbar button to view recent visits in the selected Space.
-- The sidebar now groups tabs under Pinned, Saved, and Open and shows folders.
-  Select a folder to expand or collapse it. Right-click a tab to pin, save,
+- Pinned tabs now appear in a compact Favorites tile grid with title initials
+  and full titles in tooltips. Real website favicons are not integrated yet.
+  Saved and Open tabs remain grouped below in the ordinary tab list.
+- Drag a tab from the list to Favorites to pin it, or drag a favorite down to
+  Open/Saved to change its section. Drop on a folder to file the tab there,
+  or on another tab to move it ahead of that tab.
+- All drag moves go through CrestCore and are saved in its session. A dragged
+  tab cannot move across Spaces in this preview.
+- Select a folder to expand or collapse it. Right-click a tab to pin, save,
   rename, move it into a folder or close it. Right-click a folder to rename
   or remove it while retaining its tabs.
 - The + Folder button creates a folder containing the selected tab.
@@ -83,3 +90,12 @@ This does not modify installed Edge, Arc, Arcium, or macOS Crest data.
 
 WebView2: https://developer.microsoft.com/en-us/microsoft-edge/webview2/
 VC++ runtime: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+
+DRAG TEST
+1. Pin a few tabs. Their tiles should appear in the Favorites grid.
+2. Drag a tab from Open onto the Favorites grid. It should become pinned.
+3. Drag a favorite to the Open section. It should move out of Favorites.
+4. Drag an Open tab onto a folder, then onto another tab within that folder.
+   The new folder placement and ordering should persist after restart.
+5. Hover a pinned tile to see its full name. The letters are temporary
+   fallback icons until the Windows favicon pipeline is implemented.
