@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- DOWNLOADS MANAGER
+CREST WINDOWS PREVIEW -- SETTINGS AND KEYBOARD SHORTCUTS
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -19,6 +19,24 @@ WHAT IS NEW
 - Drag the narrow vertical divider between the two webpages to resize them.
   CrestCore saves the two column-width shares with the window record.
 - Click Unsplit to separate the tabs without closing either page.
+- Settings in the toolbar lets you choose System, Light or Dark appearance.
+  This changes only Crest's WinUI controls; webpage color schemes follow the
+  webpages themselves. The appearance choice is kept at:
+  %LOCALAPPDATA%\CrestWindowsPreview\window-appearance.state
+- Settings also lets you choose the search engine separately for each Space,
+  using CrestCore's actual persistent Space preferences. Try Google in Work
+  and DuckDuckGo in Personal; the address bar resolves searches per Space.
+- Keyboard shortcuts for the browser chrome:
+    Ctrl+T            New tab
+    Ctrl+W            Close selected tab
+    Ctrl+L / Ctrl+K   Focus and select the address bar
+    Ctrl+R            Reload active page
+    Ctrl+Tab          Next tab in the current Space
+    Ctrl+Shift+Tab    Previous tab in the current Space
+    Ctrl+J            Open Crest Downloads
+  These use WinUI native keyboard accelerators. WebView2 may consume keys
+  while a webpage has keyboard focus; in-page shortcut handling is not yet
+  equivalent to full Chromium or a registered Crest engine.
 - A Downloads button in the toolbar tracks REGULAR file transfers received
   through WebView2 DownloadStarting, with bytes, progress and status.
 - The browser's Save Page As action (such as saving Gmail as a .html file)
@@ -197,3 +215,14 @@ DOWNLOADS TEST
    Crest Downloads > View saved pages and browser downloads. The native
    WebView2 list should show the saved page, even if Crest's custom file
    download list is empty.
+
+SETTINGS AND SHORTCUTS TEST
+1. Open Settings, set appearance to Light, then Dark, then Follow Windows.
+   The browser UI should update without changing the website's own theme.
+2. Choose DuckDuckGo for Personal. Enter a simple text search in the address
+   bar and verify a DuckDuckGo URL. Work should still use Google by default.
+3. Restart Crest, confirm the appearance and selected search provider persist.
+4. Test Ctrl+T, Ctrl+L, Ctrl+W, Ctrl+R, Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+J.
+   Test both with the address field selected and a webpage focused. Some
+   shortcuts may still be intercepted by WebView2 when its page has focus.
+5. Confirm Split View and regular downloads still work after these changes.
