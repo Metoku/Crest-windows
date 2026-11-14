@@ -20,7 +20,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <TextBlock Text="Crest Preview" FontSize="21" FontWeight="SemiBold" Margin="6,8,0,4" />
-            <ComboBox x:Name="SpaceBox" Grid.Row="1" Header="Workspace" HorizontalAlignment="Stretch"
+            <ComboBox x:Name="SpaceBox" Grid.Row="1" Header="Space" HorizontalAlignment="Stretch"
                       SelectionChanged="SpaceBox_SelectionChanged" />
             <ListView x:Name="TabList" Grid.Row="2"
                       SelectionChanged="TabList_SelectionChanged"
@@ -49,8 +49,8 @@
                          KeyDown="UrlBox_KeyDown"/>
                 <Button Grid.Column="4" Content="Go" Click="Go_Click" />
             </Grid>
-            <WebView2 x:Name="BrowserView" Grid.Row="1"/>
-            <TextBlock x:Name="StatusText" Grid.Row="2" Text="Windows shell preview — not yet CrestCore-integrated"
+            <Grid x:Name="BrowserHost" Grid.Row="1" />
+            <TextBlock x:Name="StatusText" Grid.Row="2" Text="CrestCore session preview — separate WebView2 profiles per Space"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        Padding="12,5" FontSize="11"/>
         </Grid>
