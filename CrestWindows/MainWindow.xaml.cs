@@ -1,15 +1,12 @@
-using CrestCore.Contracts;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.Web.WebView2.Core;
 using Windows.System;
 
 namespace CrestWindows;
 
-/// The first CrestCore-connected WinUI view. CrestCore owns the Space/tab
-/// records and typed navigation commands. A single shared WebView2 still
-/// renders the selected URL until the full Windows engine adapter is ready.
+/// Renders CrestCore's current Space and tab, while WebViewTabHost owns the
+/// live engine views. The view never mutates CrestCore's browser records.
 public sealed partial class MainWindow : Window
 {
     #region Static Variables
@@ -35,7 +32,9 @@ public sealed partial class MainWindow : Window
     #region Variables
 
     private readonly CoreWorkspace core;
+    private readonly WebViewTabHost browserTabs;
     private bool refreshing;
+    private bool browserHostLoaded;
 
     #endregion
 
@@ -46,9 +45,20 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         core = new CoreWorkspace();
-        Closed += (_, _) => core.Dispose();
+        browserTabs = new WebViewTabHost(BrowserHost);
+        browserTabs.NavigationCompleted += BrowserTabs_NavigationCompleted;
+        BrowserHost.Loaded += (_, _) =>
+        {
+            browserHostLoaded = true;
+            ShowSelectedPage();
+        };
 
-        BrowserView.NavigationCompleted += BrowserView_NavigationCompleted;
+        Closed += (_, _) =>
+        {
+            browserTabs.Dispose();
+            core.Dispose();
+        };
+
         Refresh();
     }
 
@@ -79,22 +89,43 @@ public sealed partial class MainWindow : Window
         {
             refreshing = false;
         }
+
         ShowSelectedPage();
     }
 
-    private void ShowSelectedPage()
+    /// A tab gets its own live WebView2 instance, so switching between tabs
+    /// doesn't reset navigation, forms, scroll position or page JavaScript.
+    private async void ShowSelectedPage()
     {
-        var url = core.SelectedTab?.Url ?? HomeUrl;
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        if (!browserHostLoaded || core.SelectedSpace is not { } space || core.SelectedTab is not { } tab)
             return;
 
-        UrlBox.Text = url;
-        // Do not navigate again if this same WebView2 already shows the page.
-        // A future engine binding will retain one live page per tab.
-        if (BrowserView.Source is null || BrowserView.Source.AbsoluteUri != uri.AbsoluteUri)
-            BrowserView.Source = uri;
+        try
+        {
+            await browserTabs.ShowAsync(tab.Id, space.ProfileId, tab.Url);
+            if (core.ShownTabId != tab.Id)
+                return;
 
-        StatusText.Text = "CrestCore tabs & Spaces · WebView2 shared profile (not isolated)";
+            UrlBox.Text = browserTabs.ActiveView?.Source?.AbsoluteUri ?? tab.Url ?? HomeUrl;
+            StatusText.Text = "Separate tab pages and Space profiles • sessions not yet saved";
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = "WebView2 could not initialize: " + error.Message;
+        }
+    }
+
+    private void BrowserTabs_NavigationCompleted(Guid tabId, Uri? address, bool succeeded)
+    {
+        if (core.ShownTabId != tabId)
+            return;
+
+        if (address is not null)
+            UrlBox.Text = address.AbsoluteUri;
+
+        StatusText.Text = succeeded
+            ? "Live tab retained • CrestCore navigation reports and session restore still pending"
+            : "The page could not be loaded.";
     }
 
     #endregion
@@ -170,6 +201,7 @@ public sealed partial class MainWindow : Window
                 StatusText.Text = "Enter an address or search phrase.";
                 return;
             }
+
             Refresh();
         }
         catch (Exception error)
@@ -178,31 +210,21 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void BrowserView_NavigationCompleted(WebView2 sender, CoreWebView2NavigationCompletedEventArgs e)
-    {
-        if (sender.Source is { } source)
-            UrlBox.Text = source.AbsoluteUri;
-
-        StatusText.Text = e.IsSuccess
-            ? "CrestCore session preview · live-page synchronization and profile isolation are not yet implemented"
-            : "The page could not be loaded.";
-    }
-
     private void Back_Click(object sender, RoutedEventArgs e)
     {
-        if (BrowserView.CanGoBack)
-            BrowserView.GoBack();
+        if (browserTabs.ActiveView is { CanGoBack: true } active)
+            active.GoBack();
     }
 
     private void Forward_Click(object sender, RoutedEventArgs e)
     {
-        if (BrowserView.CanGoForward)
-            BrowserView.GoForward();
+        if (browserTabs.ActiveView is { CanGoForward: true } active)
+            active.GoForward();
     }
 
     private void Reload_Click(object sender, RoutedEventArgs e)
     {
-        BrowserView.Reload();
+        browserTabs.ActiveView?.Reload();
     }
 
     #endregion
