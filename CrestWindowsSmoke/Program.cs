@@ -65,6 +65,47 @@ try
         Require(workspace.SelectedTab?.Title == "Guide",
             "A late title from an old document must be ignored.");
 
+        // The tab's section and folder are CrestCore state, never a Windows
+        // sidebar-only preference. Verify pinning, saving and folder edits.
+        workspace.PinTab(personal.Id, personalTabId);
+        Require(workspace.SelectedTab?.Placement == CrestCore.Contracts.TabPlacement.Pinned,
+            "Pin must move the tab into CrestCore's Pinned section.");
+        workspace.PinTab(personal.Id, personalTabId);
+        Require(workspace.SelectedTab?.Placement == CrestCore.Contracts.TabPlacement.Current,
+            "Unpin must return the tab to Open.");
+        workspace.SaveTab(personal.Id, personalTabId, saved: true);
+        Require(workspace.SelectedTab?.Placement == CrestCore.Contracts.TabPlacement.Saved,
+            "Save must make the tab durable.");
+
+        workspace.RenameTab(personal.Id, personalTabId, "Reading list");
+        Require(workspace.SelectedTab?.DisplayTitle == "Reading list",
+            "A custom tab name must override the webpage title.");
+
+        workspace.CreateFolder(personal.Id, personalTabId, "Bookmarks");
+        var folder = workspace.Spaces.Single(space => space.Id == personal.Id).Folders
+            .Single(folder => folder.Title == "Bookmarks");
+        Require(workspace.SelectedTab?.FolderId == folder.Id,
+            "CreateFolder should put the selected tab in the folder.");
+
+        workspace.CollapseFolder(personal.Id, folder.Id, collapsed: true);
+        Require(workspace.Spaces.Single(space => space.Id == personal.Id).Folders
+            .Single(candidate => candidate.Id == folder.Id).IsCollapsed,
+            "Folder collapse state must be owned by CrestCore.");
+        workspace.CollapseFolder(personal.Id, folder.Id, collapsed: false);
+        workspace.MoveTabOutOfFolder(personal.Id, personalTabId);
+        Require(workspace.SelectedTab?.FolderId is null, "A tab should move back to the section.");
+        workspace.MoveTabToFolder(personal.Id, personalTabId, folder.Id);
+        Require(workspace.SelectedTab?.FolderId == folder.Id, "Moving the tab into a folder must persist.");
+
+        workspace.OpenTab("https://example.net/temporary");
+        var temporaryId = workspace.SelectedTab!.Id;
+        workspace.CloseTab(personal.Id, temporaryId);
+        Require(workspace.Spaces.Single(space => space.Id == personal.Id).Tabs.All(tab => tab.Id != temporaryId),
+            "Closing an Open tab must remove it from the active sidebar.");
+        Require(workspace.Spaces.Single(space => space.Id == personal.Id).ArchivedTabs.Any(archive => archive.Tab.Id == temporaryId),
+            "Closing an Open tab must preserve its archive record.");
+        workspace.ShowTab(personal.Id, personalTabId);
+
         workspace.ShowSpace(work.Id);
         Require(workspace.ShownSpaceId == work.Id, "Switching Space must update CrestCore's window state.");
         Require(workspace.SelectedTab?.Url is null, "Work should start with an empty Start Page.");
@@ -105,6 +146,15 @@ try
             && personal.History[0].Url == "https://example.net/guide"
             && personal.History[1].Title == "Docs updated",
             "Per-Space visited URLs and updated titles must be restored in order.");
+        var restoredTab = personal.Tabs.Single(tab => tab.Id == personalTabId);
+        Require(restoredTab.Placement == CrestCore.Contracts.TabPlacement.Saved
+            && restoredTab.DisplayTitle == "Reading list",
+            "Saved placement and custom title must survive restart.");
+        var restoredFolder = personal.Folders.Single(folder => folder.Title == "Bookmarks");
+        Require(restoredTab.FolderId == restoredFolder.Id && !restoredFolder.IsCollapsed,
+            "Folder nesting and expansion must survive restart.");
+        Require(personal.ArchivedTabs.Any(archive => archive.Tab.Url == "https://example.net/temporary"),
+            "Dismissed Open tabs must persist in CrestCore's archive.");
         Require(work.History.Count == 1 && work.History[0].Url == "https://example.com/product",
             "Work history must persist independently.");
         Require(reopened.ShownSpaceId == personalSpaceId
@@ -114,7 +164,7 @@ try
             "A restored session must not create duplicate default Spaces.");
     }
 
-    Console.WriteLine("PASS: CrestCore Windows navigation, title, isolated history, persistence, and saved window selection.");
+    Console.WriteLine("PASS: CrestCore session, navigation, tab pin/save/close, folders, archive and restart.");
 }
 finally
 {
