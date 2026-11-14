@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.System;
 
 namespace CrestWindows;
@@ -30,6 +31,7 @@ public sealed partial class MainWindow : Window
     private readonly WebViewTabHost browserTabs;
     private bool refreshing;
     private bool browserHostLoaded;
+    private bool windowClosed;
 
     #endregion
 
@@ -44,6 +46,7 @@ public sealed partial class MainWindow : Window
             Path.Combine(Path.GetDirectoryName(core.StorageDirectory)!, "Profiles"));
         browserTabs.NavigationCompleted += BrowserTabs_NavigationCompleted;
         browserTabs.DocumentTitleChanged += BrowserTabs_DocumentTitleChanged;
+        browserTabs.FaviconChanged += BrowserTabs_FaviconChanged;
         BrowserHost.Loaded += (_, _) =>
         {
             browserHostLoaded = true;
@@ -52,11 +55,13 @@ public sealed partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
+            windowClosed = true;
             browserTabs.Dispose();
             core.Dispose();
         };
 
         Refresh();
+        RestoreCachedFavicons();
     }
 
     #endregion
@@ -90,6 +95,56 @@ public sealed partial class MainWindow : Window
         }
 
         ShowSelectedPage();
+    }
+
+    /// Presentation-only favicon cache: restore an icon for every tab that
+    /// still has the same persisted page address, without opening that tab's
+    /// WebView2 or affecting its CrestCore session ownership.
+    private async void RestoreCachedFavicons()
+    {
+        var tabs = core.Spaces.SelectMany(space => space.Tabs)
+            .Where(tab => !string.IsNullOrWhiteSpace(tab.Url))
+            .Select(tab => (tab.Id, Address: tab.Url!)).ToArray();
+
+        foreach (var (tabId, address) in tabs)
+        {
+            if (windowClosed) return;
+            try
+            {
+                var image = await browserTabs.LoadFaviconAsync(tabId, address);
+                if (windowClosed) return;
+                if (image is not null && core.Spaces.SelectMany(space => space.Tabs)
+                    .Any(tab => tab.Id == tabId && tab.Url == address))
+                {
+                    tabFavicons[tabId] = (address, image);
+                }
+            }
+            catch (Exception error)
+            {
+                // A cache failure should not interrupt the user's browsing.
+                System.Diagnostics.Debug.WriteLine("Favicon cache: " + error.Message);
+            }
+        }
+
+        if (!windowClosed)
+            Refresh();
+    }
+
+    private void BrowserTabs_FaviconChanged(Guid tabId, string address, BitmapImage? image)
+    {
+        if (windowClosed) return;
+
+        if (image is null)
+        {
+            if (tabFavicons.TryGetValue(tabId, out var previous) && previous.Address == address)
+                tabFavicons.Remove(tabId);
+        }
+        else
+        {
+            tabFavicons[tabId] = (address, image);
+        }
+
+        Refresh();
     }
 
     /// A tab gets its own live WebView2 instance, so switching between tabs
