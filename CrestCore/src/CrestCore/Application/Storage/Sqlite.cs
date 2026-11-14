@@ -18,8 +18,12 @@ internal static partial class Sqlite {
     /// `SQLITE_TRANSIENT`: SQLite copies bound values before the call returns.
     private static readonly nint Transient = -1;
 
-    /// Where a JIT host finds the library: macOS, then the Linux soname CI has.
-    private static readonly string[] JitLibraryNames = ["libsqlite3.dylib", "/usr/lib/libsqlite3.dylib", "libsqlite3.so.0", "libsqlite3.so"];
+    /// Where the JIT host finds SQLite. Windows ships winsqlite3.dll;
+    /// macOS and Linux use their system SQLite libraries. NativeAOT linking
+    /// continues to use the dedicated native build configuration.
+    private static readonly string[] JitLibraryNames = OperatingSystem.IsWindows()
+        ? ["winsqlite3.dll"]
+        : ["libsqlite3.dylib", "/usr/lib/libsqlite3.dylib", "libsqlite3.so.0", "libsqlite3.so"];
 
     #endregion
 

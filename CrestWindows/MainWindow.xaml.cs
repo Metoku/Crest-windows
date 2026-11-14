@@ -45,7 +45,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         core = new CoreWorkspace();
-        browserTabs = new WebViewTabHost(BrowserHost);
+        browserTabs = new WebViewTabHost(BrowserHost,
+            Path.Combine(Path.GetDirectoryName(core.StorageDirectory)!, "Profiles"));
         browserTabs.NavigationCompleted += BrowserTabs_NavigationCompleted;
         BrowserHost.Loaded += (_, _) =>
         {
@@ -107,7 +108,9 @@ public sealed partial class MainWindow : Window
                 return;
 
             UrlBox.Text = browserTabs.ActiveView?.Source?.AbsoluteUri ?? tab.Url ?? HomeUrl;
-            StatusText.Text = "Separate tab pages and Space profiles • sessions not yet saved";
+            StatusText.Text = core.WasRestored
+                ? "CrestCore session restored • Space profiles persisted (preview)"
+                : "New CrestCore session saved • Space profiles persisted (preview)";
         }
         catch (Exception error)
         {
@@ -124,7 +127,7 @@ public sealed partial class MainWindow : Window
             UrlBox.Text = address.AbsoluteUri;
 
         StatusText.Text = succeeded
-            ? "Live tab retained • CrestCore navigation reports and session restore still pending"
+            ? "Tab loaded • live URL/history reporting to CrestCore still pending"
             : "The page could not be loaded.";
     }
 

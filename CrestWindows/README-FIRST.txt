@@ -1,44 +1,62 @@
-CREST WINDOWS PREVIEW -- EARLY DEVELOPMENT BUILD
+CREST WINDOWS PREVIEW -- SESSION RESTORE TEST BUILD
 
-This is a WinUI 3 + WebView2 prototype using Crest's real C# session core,
-NOT the finished Crest browser. Do not use it for sensitive browsing yet.
+This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
+authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
 
-CURRENT PREVIEW
-- Each tab has a separate WebView2 control, kept alive when switching tabs.
-- Independent Crest Spaces have different WebView2 user-data directories,
-  mapped from CrestCore ProfileId. Same-profile Sub-Spaces can share one.
-- Personal and Work currently have separate website cookies/cache/storage.
-- These profiles are session-scoped; a new run creates a new session folder.
-- The app attempts to delete its temporary WebView2 data on clean exit.
-  If Edge processes still hold files open, abandoned folders can remain under
-  %LOCALAPPDATA%\CrestWindowsPreview\Sessions\
-- CrestCore has no persistent Windows session store yet. New launches begin
-  with default tabs and Spaces. Browser-internal navigation and page titles
-  are not yet reported back to CrestCore.
-- Profile separation has automated path checks. Actual cross-Space browser
-  cookie behavior has NOT been verified by an interactive desktop test.
+WHAT IS NEW
+- CrestCore keeps a durable SQLite session in:
+  %LOCALAPPDATA%\CrestWindowsPreview\Core\session.sqlite
+- Reopening the app restores Space identities, tabs opened through CrestCore,
+  their original addresses, and the last selected Space/tab.
+- Independent Crest Space profiles use separate persistent WebView2 folders
+  rooted at %LOCALAPPDATA%\CrestWindowsPreview\Profiles\
+- Each tab still has its own live WebView2 while the app is running. Switching
+  between tabs keeps the live page instead of always reloading it.
+- Cookies and other website data can now survive restart *in the same Space*.
+
+IMPORTANT LIMITATIONS
+- Hyperlinks and redirects followed INSIDE a webpage are not yet reported to
+  CrestCore. They may not be restored to their latest URL after restarting.
+  Enter addresses through Crest's address bar to test session restoration.
+- Browsing history, page titles, true Crest Chromium integration, browser
+  import and password management are NOT implemented.
+- This preview is not security-audited. Automated tests check that different
+  CrestCore ProfileIds use different WebView2 folders; test cookie isolation
+  manually with disposable test cookies, not real logins.
+- This build stores cookies and other site data until explicitly cleared.
+  Do NOT delete the Core folder alone: doing so creates new profile IDs and
+  leaves older WebView2 data folders unused.
+- An older pre-persistence preview's temporary session is not migrated.
 
 REQUIREMENTS
 - Windows 10 2004+ (x64) or Windows 11 x64
 - Microsoft Edge WebView2 Evergreen Runtime
-- Microsoft Visual C++ Redistributable 2015-2022 (x64), if missing
+- Visual C++ Redistributable 2015-2022 (x64) if missing
 
-START
-1. Extract EVERY file from the GitHub Actions artifact ZIP into one folder.
-2. Double-click CrestWindows.exe.
-3. If it silently exits, double-click Start-Crest-Windows.cmd for diagnostics.
-4. Report the displayed error message and/or startup.log from
+HOW TO START
+1. Extract EVERY file from the GitHub Actions artifact ZIP into a NEW folder.
+2. Double-click CrestWindows.exe (do not move the EXE out of its folder).
+3. If it silently closes, run Start-Crest-Windows.cmd from the same folder.
+4. Send the error or the startup log at:
    %LOCALAPPDATA%\CrestWindowsPreview\startup.log
 
-MANUAL CHECK
-1. Open a different web address in each Personal and Work Space.
-2. Switch tabs repeatedly: content, scroll position, and navigation history
-   should stay on each tab without automatically reloading.
-3. For cookie isolation, use a disposable TEST login on a site in Personal.
-   Work must not inherit that login. Do not use real credentials in preview.
+RESTORE TEST
+1. Open the preview. In Personal, enter https://example.org via the address
+   bar and open another tab with https://example.net.
+2. In Work, enter https://example.com in its address bar.
+3. Switch back to Personal, select the example.net tab, then CLOSE the app.
+4. Reopen CrestWindows.exe. Check that all tabs, the Work and Personal Spaces,
+   and the selected Personal tab remain.
+5. Use test-only cookies to confirm that Work does not see Personal's cookies.
 
-The Windows App SDK and .NET dependencies are shipped in the publish folder.
-Do not copy or run CrestWindows.exe alone.
+RESET THE DEVELOPMENT PREVIEW
+Close the app, then back up or delete the entire
+%LOCALAPPDATA%\CrestWindowsPreview\Core and
+%LOCALAPPDATA%\CrestWindowsPreview\Profiles folders TOGETHER.
+This deletes saved tabs and website data. Do not do this unless you intend to
+reset the preview.
 
-WebView2 runtime: https://developer.microsoft.com/en-us/microsoft-edge/webview2/
-Visual C++ runtime: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+This does not modify installed Edge, Arc, Arcium, or macOS Crest data.
+
+WebView2: https://developer.microsoft.com/en-us/microsoft-edge/webview2/
+VC++ runtime: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
