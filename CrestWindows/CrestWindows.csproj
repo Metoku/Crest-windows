@@ -23,6 +23,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../CrestCore/src/CrestCore/CrestCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
   <ItemGroup>
