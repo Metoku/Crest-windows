@@ -44,7 +44,8 @@
                                         <TextBlock Text="{Binding Initial}" FontSize="18" FontWeight="SemiBold"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                                    Visibility="{Binding FallbackVisibility}"/>
-                                        <Image Source="{Binding Favicon}" Width="26" Height="26"
+                                        <Image Source="{Binding Favicon}" Width="16" Height="16"
+                                               UseLayoutRounding="True"
                                                Stretch="Uniform" HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Visibility="{Binding FaviconVisibility}"/>
