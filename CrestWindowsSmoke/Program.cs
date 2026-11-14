@@ -99,6 +99,31 @@ try
 
         workspace.OpenTab("https://example.net/temporary");
         var temporaryId = workspace.SelectedTab!.Id;
+
+        // Drag/drop targets use the exact MoveTab contract, including the
+        // pinned tile grid, folder rows, and ordering before another tab.
+        workspace.DropTab(personal.Id, temporaryId, CrestCore.Contracts.TabPlacement.Pinned);
+        Require(workspace.SelectedTab?.Placement == CrestCore.Contracts.TabPlacement.Pinned,
+            "Dragging to favorites must move the tab into Pinned.");
+
+        workspace.DropTab(personal.Id, temporaryId, CrestCore.Contracts.TabPlacement.Saved,
+            folderId: folder.Id);
+        Require(workspace.SelectedTab?.Placement == CrestCore.Contracts.TabPlacement.Saved
+            && workspace.SelectedTab?.FolderId == folder.Id,
+            "Dragging into a folder must retain its owning section.");
+
+        var firstOpenId = workspace.Spaces.Single(space => space.Id == personal.Id).Tabs
+            .First(tab => tab.Placement == CrestCore.Contracts.TabPlacement.Current).Id;
+        workspace.DropTab(personal.Id, temporaryId, CrestCore.Contracts.TabPlacement.Current,
+            beforeTabId: firstOpenId);
+        var openOrder = workspace.Spaces.Single(space => space.Id == personal.Id).Tabs
+            .Where(tab => tab.Placement == CrestCore.Contracts.TabPlacement.Current)
+            .Select(tab => tab.Id).ToArray();
+        Require(Array.IndexOf(openOrder, temporaryId) < Array.IndexOf(openOrder, firstOpenId),
+            "Dragging before a tab must be reflected in CrestCore ordering.");
+        Require(workspace.SelectedTab?.FolderId is null,
+            "Dragging to an Open section header must remove the folder affiliation.");
+
         workspace.CloseTab(personal.Id, temporaryId);
         Require(workspace.Spaces.Single(space => space.Id == personal.Id).Tabs.All(tab => tab.Id != temporaryId),
             "Closing an Open tab must remove it from the active sidebar.");
