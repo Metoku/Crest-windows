@@ -8,6 +8,19 @@ Guid workProfileId;
 Guid personalTabId;
 try
 {
+    // Windows must remember the user's maximized choice independently of the
+    // durable CrestCore tab/Space database. This is a standalone store test;
+    // only desktop testing can verify the actual WinUI presenter transition.
+    var presentationPath = Path.Combine(storage, "window-presentation.state");
+    var presentation = new WindowPresentationStateStore(presentationPath);
+    Require(presentation.ReadMaximized(), "First launch should default to maximized.");
+    presentation.SaveMaximized(false);
+    Require(new WindowPresentationStateStore(presentationPath).ReadMaximized() == false,
+        "A restored window state must survive another application instance.");
+    presentation.SaveMaximized(true);
+    Require(new WindowPresentationStateStore(presentationPath).ReadMaximized(),
+        "A maximized window state must survive another application instance.");
+
     using (var workspace = new CoreWorkspace(storage))
     {
         Require(!workspace.WasRestored, "A brand-new core must install an initial session.");

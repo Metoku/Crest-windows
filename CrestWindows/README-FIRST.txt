@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- REAL WEBSITE FAVICONS
+CREST WINDOWS PREVIEW -- FAVICON AND WINDOW-STATE POLISH
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -22,6 +22,14 @@ IMPORTANT LIMITATIONS
 - Favorites tiles and ordinary tab rows now display real website favicons
   obtained from their own WebView2 browser engine. Pages without an icon
   display their initial (Favorites) or standard tab symbol (Saved/Open).
+- Favorites now show the icon at 16 layout pixels, rather than stretching the
+  commonly small engine favicon to 26. This should look sharper on standard
+  DPI displays; high-DPI icons are a separate future improvement.
+- Crest opens maximized on the first launch of this version. After that, it
+  saves whether you left the window maximized or restored to its own file at:
+  %LOCALAPPDATA%\CrestWindowsPreview\window-presentation.state
+  Minimize does not overwrite that choice. CrestCore session state is not
+  affected by this window-only setting.
 - Icons are cached by CrestCore tab identity and the exact visited URL at:
   %LOCALAPPDATA%\CrestWindowsPreview\Favicons\
   They can appear after restart even before their pages are loaded.
@@ -117,3 +125,10 @@ FAVICON TEST
 5. Navigate a tab to a different website. The previous favicon must not
    be shown for the new URL; the next site's favicon replaces it once ready.
 6. Sites that provide no favicon should keep the readable fallback icon.
+
+WINDOW-STATE CHECK
+1. Launch Crest: the window should open maximized by default.
+2. Click Restore Down to use a normal window, then close Crest.
+3. Relaunch: it should remain restored, not force maximized.
+4. Maximize the window, close, and relaunch. It should open maximized.
+5. The Favorites icon should look sharper than the earlier 26px enlargement.
