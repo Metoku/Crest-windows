@@ -1,0 +1,43 @@
+name: Crest Windows Browser Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [windows-core-ci]
+    paths:
+      - 'CrestWindows/**'
+      - '.github/workflows/windows-preview.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'CrestWindows/**'
+      - '.github/workflows/windows-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-preview:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: CrestCore/global.json
+      - name: Publish WinUI 3 preview (x64)
+        shell: pwsh
+        run: |
+          dotnet publish CrestWindows/CrestWindows.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true --nologo -o CrestWindows/publish
+      - name: Confirm preview EXE exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'CrestWindows/publish/CrestWindows.exe')) {
+            throw 'CrestWindows.exe was not produced'
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crest-windows-webview2-preview-x64
+          path: CrestWindows/publish/
+          if-no-files-found: error
+          retention-days: 14
