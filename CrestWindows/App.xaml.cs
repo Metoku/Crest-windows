@@ -31,8 +31,10 @@ public partial class App : Application
     {
         try
         {
-            _window = new MainWindow();
-            _window.Activate();
+            var window = new MainWindow();
+            _window = window;
+            window.Activate();
+            window.RestoreWindowPresentation();
         }
         catch (Exception exception)
         {
