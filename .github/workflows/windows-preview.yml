@@ -6,6 +6,7 @@ on:
     branches: [windows-core-ci]
     paths:
       - 'CrestWindows/**'
+      - 'CrestWindowsSmoke/**'
       - '.github/workflows/windows-preview.yml'
   pull_request:
     branches: [main]
@@ -25,6 +26,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: CrestCore/global.json
+
+      - name: Exercise CrestCore Spaces and tabs without launching the UI
+        shell: pwsh
+        run: dotnet run --project CrestWindowsSmoke/CrestWindowsSmoke.csproj -c Release --nologo
 
       - name: Publish unpackaged self-contained WinUI 3 preview (x64)
         shell: pwsh
