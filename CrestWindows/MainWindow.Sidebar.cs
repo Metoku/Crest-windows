@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace CrestWindows;
@@ -14,15 +15,32 @@ public sealed partial class MainWindow
     #region Types
 
     public sealed record SidebarEntry(Guid? TabId, Guid? FolderId,
-        TabPlacement Placement, string Label, string Glyph, Thickness Indent)
+        TabPlacement Placement, string Label, string Glyph, Thickness Indent,
+        ImageSource? Favicon)
     {
         public bool IsHeader => TabId is null && FolderId is null;
-
-        // Until the Windows adapter reports proper favicon images, pinned
-        // favorites show a recognisable initial and their full title on hover.
+        public Visibility FaviconVisibility => Favicon is null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility FallbackVisibility => Favicon is null ? Visibility.Visible : Visibility.Collapsed;
         public string Initial => string.IsNullOrWhiteSpace(Label)
             ? "•" : char.ToUpperInvariant(Label.TrimStart()[0]).ToString();
     }
+
+    #endregion
+
+    #region Variables
+
+    // Browser records stay in CrestCore. These images are only transient
+    // presentation resources and are valid for exactly one visited URL.
+    private readonly Dictionary<Guid, (string Address, BitmapImage Image)> tabFavicons = [];
+
+    #endregion
+
+    #region Actions - Favicons
+
+    private ImageSource? FaviconFor(TabState tab) =>
+        tab.Url is { } url && tabFavicons.TryGetValue(tab.Id, out var image) &&
+        string.Equals(image.Address, url, StringComparison.Ordinal)
+            ? image.Image : null;
 
     #endregion
 
@@ -30,16 +48,16 @@ public sealed partial class MainWindow
 
     /// The favorites grid is a projection of CrestCore's pinned tabs,
     /// preserving its current ordering and identity.
-    private static SidebarEntry[] PinnedEntries(SpaceState? space) =>
+    private SidebarEntry[] PinnedEntries(SpaceState? space) =>
         space is null ? [] :
         [.. space.Tabs.Where(tab => tab.Placement == TabPlacement.Pinned)
             .Select(tab => new SidebarEntry(tab.Id, null, TabPlacement.Pinned,
                 string.IsNullOrWhiteSpace(tab.DisplayTitle) ? "New Tab" : tab.DisplayTitle,
-                "\uE718", new Thickness(0)))];
+                "\uE718", new Thickness(0), FaviconFor(tab)))];
 
     /// Saved/Open sections and folder nesting come from the same CrestCore
     /// read model as the pinned grid, without duplicating tab ownership.
-    private static SidebarEntry[] SidebarEntries(SpaceState? space)
+    private SidebarEntry[] SidebarEntries(SpaceState? space)
     {
         if (space is null) return [];
 
@@ -52,13 +70,13 @@ public sealed partial class MainWindow
 
             var icon = placement == TabPlacement.Saved ? "\uE8A4" : "\uE8A5";
             entries.Add(new(null, null, placement, placement.Title.ToUpperInvariant(),
-                icon, new Thickness(2, 9, 0, 4)));
+                icon, new Thickness(2, 9, 0, 4), null));
             AppendFolderRows(entries, space, placement, parentId: null, level: 0);
         }
         return [.. entries];
     }
 
-    private static void AppendFolderRows(List<SidebarEntry> entries, SpaceState space,
+    private void AppendFolderRows(List<SidebarEntry> entries, SpaceState space,
         TabPlacement placement, Guid? parentId, int level)
     {
         // CrestCore defines the folders' hierarchy. This initial Windows
@@ -69,7 +87,7 @@ public sealed partial class MainWindow
             entries.Add(new(null, folder.Id, placement,
                 folder.Title,
                 folder.IsCollapsed ? "\uE76C" : "\uE8B7",
-                new Thickness(12 + 14 * level, 0, 0, 0)));
+                new Thickness(12 + 14 * level, 0, 0, 0), null));
             if (!folder.IsCollapsed)
                 AppendFolderRows(entries, space, placement, folder.Id, level + 1);
         }
@@ -79,7 +97,7 @@ public sealed partial class MainWindow
         {
             var name = string.IsNullOrWhiteSpace(tab.DisplayTitle) ? "New Tab" : tab.DisplayTitle;
             entries.Add(new(tab.Id, null, placement, name, "\uE8A5",
-                new Thickness(12 + 14 * level, 0, 0, 0)));
+                new Thickness(12 + 14 * level, 0, 0, 0), FaviconFor(tab)));
         }
     }
 

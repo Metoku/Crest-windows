@@ -1,4 +1,4 @@
-CREST WINDOWS PREVIEW -- FAVORITES GRID AND DRAG AND DROP
+CREST WINDOWS PREVIEW -- REAL WEBSITE FAVICONS
 
 This is a WinUI 3 + WebView2 preview using CrestCore's real C# session
 authority, NOT a finished Crest Windows browser. Do not use sensitive accounts.
@@ -19,9 +19,15 @@ IMPORTANT LIMITATIONS
   now report their landing URLs and document titles to CrestCore.
 - CrestCore records per-Space browsing history in session.sqlite. Use the
   History toolbar button to view recent visits in the selected Space.
-- Pinned tabs now appear in a compact Favorites tile grid with title initials
-  and full titles in tooltips. Real website favicons are not integrated yet.
-  Saved and Open tabs remain grouped below in the ordinary tab list.
+- Favorites tiles and ordinary tab rows now display real website favicons
+  obtained from their own WebView2 browser engine. Pages without an icon
+  display their initial (Favorites) or standard tab symbol (Saved/Open).
+- Icons are cached by CrestCore tab identity and the exact visited URL at:
+  %LOCALAPPDATA%\CrestWindowsPreview\Favicons\
+  They can appear after restart even before their pages are loaded.
+- Icons change as webpages navigate; a stale cached icon must not be shown
+  for a different visited URL. The cache is presentation-only, not tab state.
+- Saved and Open tabs remain grouped below the Favorites tile grid.
 - Drag a tab from the list to Favorites to pin it, or drag a favorite down to
   Open/Saved to change its section. Drop on a folder to file the tab there,
   or on another tab to move it ahead of that tab.
@@ -82,7 +88,8 @@ NAVIGATION AND HISTORY TEST
 RESET THE DEVELOPMENT PREVIEW
 Close the app, then back up or delete the entire
 %LOCALAPPDATA%\CrestWindowsPreview\Core and
-%LOCALAPPDATA%\CrestWindowsPreview\Profiles folders TOGETHER.
+%LOCALAPPDATA%\CrestWindowsPreview\Profiles and
+%LOCALAPPDATA%\CrestWindowsPreview\Favicons folders TOGETHER.
 This deletes saved tabs and website data. Do not do this unless you intend to
 reset the preview.
 
@@ -97,5 +104,16 @@ DRAG TEST
 3. Drag a favorite to the Open section. It should move out of Favorites.
 4. Drag an Open tab onto a folder, then onto another tab within that folder.
    The new folder placement and ordering should persist after restart.
-5. Hover a pinned tile to see its full name. The letters are temporary
-   fallback icons until the Windows favicon pipeline is implemented.
+5. Hover a pinned tile to see its full title. Website icons replace
+   its initial as soon as the site publishes a favicon.
+
+FAVICON TEST
+1. Open a familiar site such as https://www.youtube.com and pin its tab.
+   Its real favicon should replace the title initial in Favorites.
+2. Open another site that publishes a favicon and check the Open list icon.
+3. Switch tabs and Spaces. Icons should remain attached to the right tab.
+4. Close and reopen the app. Previously visited pinned tabs should show
+   cached icons before they load again.
+5. Navigate a tab to a different website. The previous favicon must not
+   be shown for the new URL; the next site's favicon replaces it once ready.
+6. Sites that provide no favicon should keep the readable fallback icon.

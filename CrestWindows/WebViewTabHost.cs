@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Storage.Streams;
 using Microsoft.Web.WebView2.Core;
 
 namespace CrestWindows;
@@ -17,8 +19,10 @@ public sealed class WebViewTabHost : IDisposable
 
     #region Types
 
-    private sealed class TabPage(Guid profileId, string? address)
+    private sealed class TabPage(Guid tabId, Guid profileId, string? address)
     {
+        public Guid TabId { get; } = tabId;
+        public int FaviconRevision { get; set; }
         public Guid ProfileId { get; } = profileId;
         public string? CoreAddress { get; set; } = address;
         public WebView2 View { get; } = new()
@@ -39,6 +43,7 @@ public sealed class WebViewTabHost : IDisposable
 
     private readonly Grid host;
     private readonly SpaceProfileDirectories directories;
+    private readonly TabFaviconStore faviconStore;
     private readonly Dictionary<Guid, TabPage> pages = [];
     private readonly Dictionary<Guid, Task<CoreWebView2Environment>> environments = [];
     private Guid? activeTabId;
@@ -46,6 +51,7 @@ public sealed class WebViewTabHost : IDisposable
 
     public event Action<Guid, Uri?, string?, bool>? NavigationCompleted;
     public event Action<Guid, Uri?, string>? DocumentTitleChanged;
+    public event Action<Guid, string, BitmapImage?>? FaviconChanged;
 
     public WebView2? ActiveView =>
         activeTabId is { } id && pages.TryGetValue(id, out var page) && page.IsReady ? page.View : null;
@@ -61,6 +67,7 @@ public sealed class WebViewTabHost : IDisposable
         // ProfileId comes from CrestCore's durable session. Reusing the same
         // id on restart restores only its own cookies and site data.
         directories = new SpaceProfileDirectories(profileRoot);
+        faviconStore = new TabFaviconStore(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(profileRoot))!, "Favicons"));
     }
 
     #endregion
@@ -75,7 +82,7 @@ public sealed class WebViewTabHost : IDisposable
 
         if (!pages.TryGetValue(tabId, out var page))
         {
-            page = new TabPage(profileId, coreAddress);
+            page = new TabPage(tabId, profileId, coreAddress);
             var capturedTabId = tabId;
             page.View.NavigationCompleted += (sender, args) =>
             {
@@ -116,6 +123,12 @@ public sealed class WebViewTabHost : IDisposable
 
         await page.Initialization;
     }
+
+    /// A favicon for a tab restored by CrestCore can be shown before its
+    /// WebView2 is loaded. The address must match exactly, so a changed site
+    /// never inherits an unrelated old icon.
+    public Task<BitmapImage?> LoadFaviconAsync(Guid tabId, string? address) =>
+        faviconStore.ReadAsync(tabId, address);
 
     /// A dismissed tab's live engine must not stay attached after CrestCore
     /// archives the tab or puts away its saved/pinned page. Future selection
@@ -187,8 +200,69 @@ public sealed class WebViewTabHost : IDisposable
                 DocumentTitleChanged?.Invoke(tabId, page.View.Source, title);
         };
 
+        page.View.CoreWebView2.FaviconChanged += (_, _) => _ = ReadFaviconAsync(page);
+
         page.IsReady = true;
         Navigate(page);
+    }
+
+    /// Read the icon through the current WebView2 environment rather than
+    /// fetching a favicon URL with a separate unauthenticated HTTP client.
+    /// Late results are ignored when their page has navigated or closed.
+    private async Task ReadFaviconAsync(TabPage page)
+    {
+        if (disposed || !pages.TryGetValue(page.TabId, out var livePage) ||
+            !ReferenceEquals(page, livePage))
+            return;
+
+        var revision = ++page.FaviconRevision;
+        var address = page.View.Source?.AbsoluteUri;
+        var web = page.View.CoreWebView2;
+        if (address is null || !Uri.TryCreate(address, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return;
+
+        bool Current() => !disposed &&
+            pages.TryGetValue(page.TabId, out var current) && ReferenceEquals(current, page) &&
+            page.FaviconRevision == revision &&
+            page.View.Source?.AbsoluteUri == address;
+
+        if (string.IsNullOrWhiteSpace(web.FaviconUri))
+        {
+            if (Current())
+                FaviconChanged?.Invoke(page.TabId, address, null);
+            return;
+        }
+
+        try
+        {
+            using var imageStream = await web.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png);
+            if (imageStream is null || imageStream.Size == 0 ||
+                imageStream.Size > TabFaviconStore.MaximumIconBytes)
+                return;
+
+            var length = (uint)imageStream.Size;
+            var png = new byte[length];
+            using (var reader = new DataReader(imageStream.GetInputStreamAt(0)))
+            {
+                if (await reader.LoadAsync(length) != length)
+                    return;
+                reader.ReadBytes(png);
+            }
+
+            if (!Current()) return;
+            var bitmap = await TabFaviconStore.ImageFromPngAsync(png);
+            if (!Current() || bitmap is null) return;
+
+            FaviconChanged?.Invoke(page.TabId, address, bitmap);
+            await faviconStore.SaveAsync(page.TabId, address, png);
+        }
+        catch (Exception error) when (error is IOException or InvalidOperationException
+            or ArgumentException or System.Runtime.InteropServices.COMException)
+        {
+            // Some pages publish no usable image or cancel an in-flight
+            // favicon fetch. An icon failure cannot interrupt navigation.
+        }
     }
 
     private static void Navigate(TabPage page)
